@@ -150,11 +150,11 @@ def main():
 		print('Initializing IMU logger.')
 		imu_logger = DataLogger('imu_time,thigh_l_accel_x,thigh_l_accel_y,thigh_l_accel_z,thigh_l_gyro_x,thigh_l_gyro_y,thigh_l_gyro_z\
 			,thigh_r_accel_x,thigh_r_accel_y,thigh_r_accel_z,thigh_r_gyro_x,thigh_r_gyro_y,thigh_r_gyro_z,sync')
-		imu_logger.init_file('log/' + f_name + '_imu.csv')
+		imu_logger.init_file('log/' + f_name + '_imu.txt')
 
 		print('Initializing torque estimator logger.')
 		trq_logger = DataLogger('imu_time, trq_r, trq_l, exo_time')
-		trq_logger.init_file('log/' + f_name + '_trq.csv')
+		trq_logger.init_file('log/' + f_name + '_trq.txt')
 
 		print('Initializing sync pin.')
 		# Set up sync
@@ -178,7 +178,7 @@ def main():
 
 		# q_input_save = mp.Queue()
 		# input_logger = DataLogger('imu_time,thigh_r_accel_x, thigh_r_accel_y, thigh_r_accel_z, thigh_r_gyro_x, thigh_r_gyro_y, thigh_r_gyro_z, pelvis_gyro_x, pelvis_gyro_y, pelvis_gyro_z, pelvis_accel_x, pelvis_accel_y, pelvis_accel_z, d_hip_sagittal_r_filt, hip_sagittal_r')
-		# input_logger.init_file('log/' + f_name + '_input.csv')
+		# input_logger.init_file('log/' + f_name + '_input.txt')
 
 		print('Starting IMU process.')
 		imu_process = mp.Process(target=run_imus, args=(imu_l, imu_r, q_imu_inf, q_imu_save, stamp, sync_pin,))
