@@ -1,7 +1,7 @@
 import torch
 from rtmodels import ModelRT
 # from biomechdata_orig import TCN
-from biomechdata2 import TCN
+from biomechdata import TCN
 from copy import deepcopy
 import numpy as np
 import time
@@ -12,9 +12,9 @@ def main():
 	cpu = torch.device('cpu')
 
 	print('Loading trt model.')
-	model_trt = ModelRT()
+	model_trt = ModelRT(m_dir='models')
 
-	m_file_trt = model_trt.m_file
+	m_file_trt = model_trt.m_filepath
 	m_file_torch = m_file_trt.replace('.trt', '.tar')
 
 	# m_file_torch = 'R_S1-14-187_AB05.tar'
@@ -36,7 +36,7 @@ def main():
 	print(time.perf_counter() - start_time)
 
 	# d_file = 'Data/AB05_LG_BT_1_3_r_1.csv'
-	d_file = 'Data/test9_step.csv'
+	d_file = 'data/test9_step.csv'
 	label = 'hip_flexion_r_moment'
 	print(f'Loading {d_file}.')
 	col_headers = ['thigh_r_accel_x', 'thigh_r_accel_y', 'thigh_r_accel_z', 'thigh_r_gyro_x', 'thigh_r_gyro_y', 'thigh_r_gyro_z',\

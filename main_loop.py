@@ -2,13 +2,13 @@ import multiprocessing as mp
 import time
 import traceback
 import numpy as np
-from coprocutils import get_queue_data, parse_exo_msg, interp_data, Stamp, DataLogger
-from imu import ExoImu, Side
-from rtmodels import ModelRT
-from ipserver import ServerTCP
+from utils.coprocutils import get_queue_data, parse_exo_msg, interp_data, Stamp, DataLogger
+from imu.imu import ExoImu, Side
+from models.rtmodels import ModelRT
+from server.ipserver import ServerTCP
 import board
 import digitalio
-from os import path, makedirs
+from os import path, makedirs, getcwd
 
 
 DES_S_TIME = 0.005
@@ -136,11 +136,11 @@ def main():
 		imu_r = ExoImu(Side.RIGHT)
 
 		print('Initializing left torque estimator.')
-		trq_est_l = ModelRT()
+		trq_est_l = ModelRT(m_dir = getcwd() + '/models/models')
 		trq_est_l.test_model(num_tests=5, verbose=True)
 
 		print('Initializing right torque estimator.')
-		trq_est_r = ModelRT()
+		trq_est_r = ModelRT(m_dir = getcwd() + '/models/models')
 		trq_est_r.test_model(num_tests=5, verbose=True)
 
 		time_start = time.perf_counter()

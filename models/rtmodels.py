@@ -6,8 +6,10 @@ import time
 from os import listdir, getcwd
 
 class ModelRT(object):
-	def __init__(self, m_file='', input_shape=None):
+	def __init__(self, m_file='', m_dir='', input_shape=None):
+		self.m_dir = m_dir if any(m_dir) else None
 		self.m_file = m_file if any(m_file) else self.choose_model()
+		self.m_filepath = self.m_dir + '/' + self.m_file if self.m_dir else self.m_file
 		print(f'Loading {self.m_file}.')
 
 		self.input_shape = input_shape if input_shape else self.get_shape_from_name()
@@ -18,7 +20,7 @@ class ModelRT(object):
 		self.init_model()
 
 	def choose_model(self):
-		m_files = [f for f in listdir(getcwd()) if '.trt' in f]
+		m_files = [f for f in listdir(self.m_dir) if '.trt' in f]
 
 		print()
 		for i, m_file in enumerate(m_files):
@@ -39,7 +41,7 @@ class ModelRT(object):
 
 	def init_model(self):
 		# Load model and set up engine
-		f = open(self.m_file, "rb")
+		f = open(self.m_filepath, "rb")
 		self.runtime = trt.Runtime(trt.Logger(trt.Logger.WARNING))
 		self.engine = self.runtime.deserialize_cuda_engine(f.read())
 		self.context = self.engine.create_execution_context()
