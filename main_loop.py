@@ -135,13 +135,17 @@ def main():
 		imu_l = ExoImu(Side.LEFT)
 		imu_r = ExoImu(Side.RIGHT)
 
-		print('Initializing left torque estimator.')
-		trq_est_l = ModelRT(m_dir = getcwd() + '/models/models')
-		trq_est_l.test_model(num_tests=5, verbose=True)
+		# print('Initializing left torque estimator.')
+		# trq_est_l = ModelRT(m_dir = getcwd() + '/models/models')
+		# trq_est_l.test_model(num_tests=5, verbose=True)
 
-		print('Initializing right torque estimator.')
-		trq_est_r = ModelRT(m_dir = getcwd() + '/models/models')
-		trq_est_r.test_model(num_tests=5, verbose=True)
+		# print('Initializing right torque estimator.')
+		# trq_est_r = ModelRT(m_dir = getcwd() + '/models/models')
+		# trq_est_r.test_model(num_tests=5, verbose=True)
+
+		print('Initializing torque estimator.')
+		trq_est = ModelRT(m_dir = getcwd() + '/models/models')
+		trq_est.test_model(num_tests=5, verbose=True)
 
 		time_start = time.perf_counter()
 		if not path.exists('log'): makedirs('log')
@@ -200,7 +204,8 @@ def main():
 		buf_len = int(1/DES_S_TIME) # set up data buffers to hold ~1 second of data
 		exo_data = np.zeros((buf_len, Q_EXO_INF_SIZE))
 		imu_data = np.zeros((buf_len, Q_IMU_INF_SIZE))
-		interp_len = trq_est_r.input_shape[2]
+		# interp_len = trq_est_r.input_shape[2]
+		interp_len = trq_est.input_shape[2]
 
 		# count = 0
 		while True:
@@ -226,16 +231,44 @@ def main():
 				exo_data_interp = interp_data(t_interp, exo_data[:, 0], exo_data[:, 1:], dim=0)
 				imu_data_interp = interp_data(t_interp, imu_data[:, 0], imu_data[:, 1:], dim=0)
 
-				# Right Side Input Order: thigh_r_accel_x, thigh_r_accel_y, thigh_r_accel_z, thigh_r_gyro_x, thigh_r_gyro_y, thigh_r_gyro_z, pelvis_gyro_x, pelvis_gyro_y, pelvis_gyro_z, pelvis_accel_x, pelvis_accel_y, pelvis_accel_z, d_hip_sagittal_r_filt, hip_sagittal_r
-				# Left Side Input Order: thigh_l_accel_x, thigh_l_accel_y, thigh_l_accel_z, thigh_l_gyro_x, thigh_l_gyro_y, thigh_l_gyro_z, pelvis_gyro_x, pelvis_gyro_y, pelvis_gyro_z, pelvis_accel_x, pelvis_accel_y, pelvis_accel_z, d_hip_sagittal_l_filt, hip_sagittal_l
-				model_input_r = np.concatenate((imu_data_interp[:, 6:], exo_data_interp[:, 4:-1], exo_data_interp[:, 3].reshape(-1, 1), exo_data_interp[:, 1].reshape(-1, 1)), axis=1).transpose()
-				model_input_l = np.concatenate((imu_data_interp[:, :6], exo_data_interp[:, 4:-1], exo_data_interp[:, 2].reshape(-1, 1), exo_data_interp[:, 0].reshape(-1, 1)), axis=1).transpose()
+				d_hip_sagittal_l_filt = exo_data_interp[:, 2].reshape(-1, 1)
+				d_hip_sagittal_r_filt = exo_data_interp[:, 3].reshape(-1, 1)
+				hip_sagittal_l = exo_data_interp[:, 0].reshape(-1, 1)
+				hip_sagittal_r  = exo_data_interp[:, 1].reshape(-1, 1)
+				pelvis_accel = exo_data_interp[:, 7:10]  # x, y, z
+				pelvis_gyro = exo_data_interp[:, 4:7]  # x, y, z
+				thigh_l_imu = imu_data_interp[:, :6]  # ax, ay, az, gx, gy, gz
+				thigh_r_imu = imu_data_interp[:, 6:]  # ax, ay, az, gx, gy, gz
 
-				model_input_r = np.ascontiguousarray(model_input_r.reshape(1, model_input_r.shape[0], model_input_r.shape[1]).astype('float32'))
-				model_input_l = np.ascontiguousarray(model_input_l.reshape(1, model_input_l.shape[0], model_input_l.shape[1]).astype('float32'))
+				# # Right Side Input Order: thigh_r_accel_x, thigh_r_accel_y, thigh_r_accel_z, thigh_r_gyro_x, thigh_r_gyro_y, thigh_r_gyro_z, pelvis_gyro_x, pelvis_gyro_y, pelvis_gyro_z, pelvis_accel_x, pelvis_accel_y, pelvis_accel_z, d_hip_sagittal_r_filt, hip_sagittal_r
+				# # Left Side Input Order: thigh_l_accel_x, thigh_l_accel_y, thigh_l_accel_z, thigh_l_gyro_x, thigh_l_gyro_y, thigh_l_gyro_z, pelvis_gyro_x, pelvis_gyro_y, pelvis_gyro_z, pelvis_accel_x, pelvis_accel_y, pelvis_accel_z, d_hip_sagittal_l_filt, hip_sagittal_l
+				# model_input_r = np.concatenate((imu_data_interp[:, 6:], exo_data_interp[:, 4:-1], exo_data_interp[:, 3].reshape(-1, 1), exo_data_interp[:, 1].reshape(-1, 1)), axis=1).transpose()
+				# model_input_l = np.concatenate((imu_data_interp[:, :6], exo_data_interp[:, 4:-1], exo_data_interp[:, 2].reshape(-1, 1), exo_data_interp[:, 0].reshape(-1, 1)), axis=1).transpose()
 
-				trq_r = trq_est_r.predict(model_input_r)[0, 0]
-				trq_l = trq_est_l.predict(model_input_l)[0, 0]
+				# model_input_r = np.ascontiguousarray(model_input_r.reshape(1, model_input_r.shape[0], model_input_r.shape[1]).astype('float32'))
+				# model_input_l = np.ascontiguousarray(model_input_l.reshape(1, model_input_l.shape[0], model_input_l.shape[1]).astype('float32'))
+
+				# trq_r = trq_est_r.predict(model_input_r)[0, 0]
+				# trq_l = trq_est_l.predict(model_input_l)[0, 0]
+
+				# Sorted Input Order: d_hip_sagittal_filt, hip_sagittal, pelvis_accel_x, pelvis_accel_y, pelvis_accel_z, pelvis_gyro_x, pelvis_gyro_y, pelvis_gyro_z, thigh_accel_x, thigh_accel_y, thigh_accel_z, thigh_gyro_x, thigh_gyro_y, thigh_gyro_z
+				model_input_r = np.concatenate((d_hip_sagittal_r_filt, hip_sagittal_r, pelvis_accel, pelvis_gyro, thigh_r_imu), axis=1).transpose()
+								
+				# Flip on Left Side: thigh_l_accel_y, thigh_l_gyro_x, thigh_l_gyro_z, pelvis_accel_z, pelvis_gyro_x, pelvis_gyro_y
+				thigh_l_imu[:, 1] *= -1  # ay
+				thigh_l_imu[:, 3] *= -1  # gx
+				thigh_l_imu[:, 5] *= -1  # gz
+				pelvis_accel[:, 2] *= -1  # az
+				pelvis_gyro[:, 0:2] *= -1  # gx, gy
+				model_input_l = np.concatenate((d_hip_sagittal_l_filt, hip_sagittal_l, pelvis_accel, pelvis_gyro, thigh_l_imu), axis=1).transpose()
+
+				model_input_r = model_input_r.reshape(1, model_input_r.shape[0], model_input_r.shape[1])
+				model_input_l = model_input_l.reshape(1, model_input_l.shape[0], model_input_l.shape[1])
+				model_input = np.ascontiguousarray(np.concatenate((model_input_r, model_input_l), axis=0)).astype('float32')
+
+				trq = trq_est.predict(model_input)
+				trq_r = trq[0, 0]
+				trq_l = trq[0, 1]
 
 				q_trq_inf.put_nowait(np.array((trq_r, trq_l)).reshape(1, -1))
 				q_trq_save.put_nowait(np.array((exo_data[-1, 0], trq_r, trq_l, exo_data[-1, -1])).reshape(1, -1))

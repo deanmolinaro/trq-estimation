@@ -48,7 +48,7 @@ class ModelRT(object):
 
 		# Allocate device memory
 		model_input = np.ones(self.input_shape, dtype=np.float32)
-		self.output = np.empty([1, 1], dtype=np.float32)
+		self.output = np.empty([1, self.input_shape[0]], dtype=np.float32)
 		self.d_input = cuda.mem_alloc(1 * model_input.nbytes)
 		self.d_output = cuda.mem_alloc(1 * self.output.nbytes)
 		self.bindings = [int(self.d_input), int(self.d_output)]
@@ -95,5 +95,5 @@ class ModelRT(object):
 		return o_all, t_all
 
 if __name__=="__main__":
-	model = ModelRT()
+	model = ModelRT(m_dir='models')
 	model.test_model(num_tests=10, verbose=True)

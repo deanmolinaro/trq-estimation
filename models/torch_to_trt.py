@@ -1,7 +1,7 @@
 import torch
 import torch.onnx
-# import biomechdata_orig as biomechdata
-import biomechdata
+import biomechdata_orig as biomechdata
+# import biomechdata
 import argparse
 import subprocess
 
@@ -39,20 +39,24 @@ def load_model(t, m):
 	model.eval()
 	return model, model_dict
 
-def to_trt(t='', m='', m_dir=''):
+def to_trt(t='', m='', m_dir='', b=None):
 	m_dir = m_dir if any(m_dir) else getcwd() + '/models'
 	if not any(m):
 		m = from_menu(m_dir)
 	m_onnx = m.replace('.tar', '.onnx')
 	m_trt = m.replace('.tar', '.trt')
 
+	if not b:
+		b = int(input('Please input batch size: '))
+
 	print(f'Loading {m} as {t}...')
 	model, model_dict = load_model(t, m)
-	input_shape = (1, model_dict['input_size'], model_dict['eff_hist']+1)
+	input_shape = (b, model_dict['input_size'], model_dict['eff_hist']+1)
 	print('Done.')
 
 	print(f'Converting {m} to {m_onnx}...')
 	model_input = torch.randn(input_shape)
+	print(model_input.shape)
 	torch.onnx.export(model, model_input, m.replace('.tar', '.onnx'))
 	print('Done.')
 
@@ -74,6 +78,7 @@ if __name__=="__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-t', type=str, default='TCN')
 	parser.add_argument('-m', type=str, default='')
+	parser.add_argument('-b', type=int, default=None)
 
 	# Parse input argument
 	args = parser.parse_args()
