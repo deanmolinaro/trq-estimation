@@ -223,16 +223,32 @@ def main():
 				pelvis_gyro = pelvis_gyro.transpose()
 				pelvis_accel = pelvis_accel.transpose()
 
+				thigh_l_gyro = thigh_l_transform.rotate(thigh_l_gyro.transpose())
+				thigh_l_accel = thigh_l_transform.rotate(thigh_l_accel.transpose())
+				thigh_l_ang_accel = np.diff(thigh_l_gyro, axis=1) / 0.005 # Assuming data is at 200 Hz
+				thigh_l_ang_accel = np.concatenate((thigh_l_ang_accel[:, 0].reshape(-1, 1), thigh_l_ang_accel), axis=1) # Repeat first value so arrays are the same length
+				thigh_l_accel = thigh_l_transform.translate_accel(thigh_l_accel, thigh_l_gyro, thigh_l_ang_accel)
+				thigh_l_gyro = thigh_l_gyro.transpose()
+				thigh_l_accel = thigh_l_accel.transpose()
+
+				thigh_r_gyro = thigh_r_transform.rotate(thigh_r_gyro.transpose())
+				thigh_r_accel = thigh_r_transform.rotate(thigh_r_accel.transpose())
+				thigh_r_ang_accel = np.diff(thigh_r_gyro, axis=1) / 0.005 # Assuming data is at 200 Hz
+				thigh_r_ang_accel = np.concatenate((thigh_r_ang_accel[:, 0].reshape(-1, 1), thigh_r_ang_accel), axis=1) # Repeat first value so arrays are the same length
+				thigh_r_accel = thigh_r_transform.translate_accel(thigh_r_accel, thigh_r_gyro, thigh_r_ang_accel)
+				thigh_r_gyro = thigh_r_gyro.transpose()
+				thigh_r_accel = thigh_r_accel.transpose()
+
 				# Sorted Input Order: d_hip_sagittal_filt, hip_sagittal, pelvis_accel_x, pelvis_accel_y, pelvis_accel_z, pelvis_gyro_x, pelvis_gyro_y, pelvis_gyro_z, thigh_accel_x, thigh_accel_y, thigh_accel_z, thigh_gyro_x, thigh_gyro_y, thigh_gyro_z
-				model_input_r = np.concatenate((d_hip_sagittal_r_filt, hip_sagittal_r, pelvis_accel, pelvis_gyro, thigh_r_imu), axis=1).transpose()
+				model_input_r = np.concatenate((d_hip_sagittal_r_filt, hip_sagittal_r, pelvis_accel, pelvis_gyro, thigh_r_accel, thigh_r_gyro), axis=1).transpose()
 								
 				# Flip on Left Side: thigh_l_accel_y, thigh_l_gyro_x, thigh_l_gyro_z, pelvis_accel_z, pelvis_gyro_x, pelvis_gyro_y
-				thigh_l_imu[:, 1] *= -1  # ay
-				thigh_l_imu[:, 3] *= -1  # gx
-				thigh_l_imu[:, 5] *= -1  # gz
+				thigh_l_accel[:, 1] *= -1  # ay
+				thigh_l_gyro[:, 0] *= -1  # gx
+				thigh_l_gyro[:, 2] *= -1 # gz
 				pelvis_accel[:, 2] *= -1  # az
 				pelvis_gyro[:, 0:2] *= -1  # gx, gy
-				model_input_l = np.concatenate((d_hip_sagittal_l_filt, hip_sagittal_l, pelvis_accel, pelvis_gyro, thigh_l_imu), axis=1).transpose()
+				model_input_l = np.concatenate((d_hip_sagittal_l_filt, hip_sagittal_l, pelvis_accel, pelvis_gyro, thigh_l_accel, thigh_l_gyro), axis=1).transpose()
 
 				model_input_r = model_input_r.reshape(1, model_input_r.shape[0], model_input_r.shape[1])
 				model_input_l = model_input_l.reshape(1, model_input_l.shape[0], model_input_l.shape[1])
