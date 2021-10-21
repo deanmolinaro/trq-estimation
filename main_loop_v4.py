@@ -10,6 +10,7 @@ import board
 import digitalio
 from os import path, makedirs, getcwd
 from imu.transforms import Transform
+from utils.filters import Butterworth
 
 DES_S_TIME = 0.005
 Q_IMU_INF_SIZE = 13  # l/r 6-axis IMU + timestamp
@@ -100,6 +101,7 @@ def run_server(server, q_exo, q_trq, exo_msg_len, stamp):
 
 				# Convert torque estimate to message template
 				send_msg = "!" + "{:.5f}".format(trq[-1, 1]*-1) + "," + "{:.5f}".format(trq[-1, 0]*-1) # flip l/r and mult by -1
+				# print(send_msg)
 				server.to_client(send_msg)
 
 				# Check that trt model makes same estimates as pytorch version
@@ -112,6 +114,7 @@ def run_server(server, q_exo, q_trq, exo_msg_len, stamp):
 
 def main():
 	try:
+		# TODO: Add delay, clean up code, remove real-time transforms, check ending comma from exo message
 		print('Initializing torque estimator.')
 		trq_est = ModelRT(m_dir = getcwd() + '/models/models')
 		trq_est.test_model(num_tests=5, verbose=True)
@@ -120,10 +123,10 @@ def main():
 		if not path.exists('log'): makedirs('log')
 		f_name = input('Please enter log file name: ')
 
-		# print('Initializing IMU logger.')
-		# imu_logger = DataLogger('imu_time,thigh_l_accel_x,thigh_l_accel_y,thigh_l_accel_z,thigh_l_gyro_x,thigh_l_gyro_y,thigh_l_gyro_z\
-		# 	,thigh_r_accel_x,thigh_r_accel_y,thigh_r_accel_z,thigh_r_gyro_x,thigh_r_gyro_y,thigh_r_gyro_z,sync')
-		# imu_logger.init_file('log/' + f_name + '_imu.txt')
+		print('Initializing IMU logger.')
+		imu_logger = DataLogger('imu_time,thigh_l_accel_x,thigh_l_accel_y,thigh_l_accel_z,thigh_l_gyro_x,thigh_l_gyro_y,thigh_l_gyro_z\
+			,thigh_r_accel_x,thigh_r_accel_y,thigh_r_accel_z,thigh_r_gyro_x,thigh_r_gyro_y,thigh_r_gyro_z,sync')
+		imu_logger.init_file('log/' + f_name + '_imu.txt')
 
 		print('Initializing torque estimator logger.')
 		trq_logger = DataLogger('imu_time, trq_r, trq_l, exo_time')
@@ -143,7 +146,7 @@ def main():
 		# q_imu_inf = mp.Queue()
 		q_exo_inf = mp.Queue()
 		q_trq_inf = mp.Queue()
-		# q_imu_save = mp.Queue()
+		q_imu_save = mp.Queue()
 		q_trq_save = mp.Queue()
 
 		processes = []
@@ -164,13 +167,15 @@ def main():
 		[p.start() for p in processes]
 
 		# Transforms from v4 exo IMU frame to original frame
-		pelvis_T = np.identity(4)
-		thigh_r_T = np.identity(4)
-		thigh_l_T = np.identity(4)
-		# T = np.array([[0.1935, 0.2979, -0.9348, 0.0270], [0.9811, -0.0637, 0.1828, -0.0027], [-0.0051, -0.9525, -0.3046, -0.1205], [0, 0, 0, 1]])
-		self.pelvis_transform = Transform(pelvis_T)
-		self.thigh_r_transform = Transform(thigh_r_T)
-		self.thigh_l_transform = Transform(thigh_l_T)
+		# pelvis_T = np.array([[0.1935, 0.2979, -0.9348, 0.0270], [0.9811, -0.0637, 0.1828, -0.0027], [-0.0051, -0.9525, -0.3046, -0.1205], [0, 0, 0, 1]]) # original used for gp_estimator
+		pelvis_T = np.array([[-0.1936, 0.1375, -0.9714, 0.0153], [0.9800, -0.0197, -0.1981, -0.1116], [-0.0463, -0.9903, -0.1309, -0.0269], [0, 0, 0, 1]])
+		thigh_l_T = np.array([[-0.2107, 0.9750, 0.0708, -0.0393], [0.0249, -0.0670, 0.9974, 0.1443], [0.9772, 0.2119, -0.0101, -0.0935], [0, 0, 0, 1]])
+		thigh_r_T = np.array([[-0.1948, -0.9749, 0.1082, -0.0173], [-0.3277, -0.0393, -0.9440, -0.1253], [0.9245, -0.2193, -0.3117, -0.1241], [0, 0, 0, 1]])
+
+		pelvis_transform = Transform(pelvis_T)
+		thigh_r_transform = Transform(thigh_r_T)
+		thigh_l_transform = Transform(thigh_l_T)
+		trq_filter = Butterworth(1, 10, fs=50, n_cols=2)
 
 		buf_len = int(1/DES_S_TIME) # set up data buffers to hold ~1 second of data
 		exo_data = np.zeros((buf_len, Q_EXO_INF_SIZE))
@@ -185,27 +190,32 @@ def main():
 
 			if not q_exo_inf.empty():
 				exo_data_new = get_queue_data(q_exo_inf, Q_EXO_INF_SIZE)
-				exo_data = np.delete(exo_data, slice(exo_data_new.shape[0]), axis=0)
-				exo_data = np.append(exo_data, exo_data_new, axis=0)
 
-				t_exo = exo_data[:, 0]
-				t_end = t_imu[-1]
-				t_start = t_end - ((interp_len - 1) * DES_S_TIME)
-				t_interp = np.linspace(t_start, t_end, interp_len)
+				S_COPROC_TIME = slice(0, 1)
+				S_EXO_TIME = slice(23, 24)
+				S_HIP_SAGITTAL_L = slice(1, 2)
+				S_HIP_SAGITTAL_R = slice(2, 3)
+				S_D_HIP_SAGITTAL_L = slice(3, 4)
+				S_D_HIP_SAGITTAL_R = slice(4, 5)
+				S_PELVIS_ACCEL = slice(8, 11)
+				S_PELVIS_GYRO = slice(5, 8)
+				S_THIGH_L_ACCEL = slice(17, 20)
+				S_THIGH_L_GYRO = slice(20, 23)
+				S_THIGH_R_ACCEL = slice(11, 14)
+				S_THIGH_R_GYRO = slice(14, 17)
 
-				exo_data_interp = interp_data(t_interp, exo_data[:, 0], exo_data[:, 1:], dim=0)
+				# Transform IMU data to original frame
+				exo_data_new = np.concatenate((exo_data[-1, :].reshape(1, -1), exo_data_new), axis=0)
+				pelvis_accel = exo_data_new[:, S_PELVIS_ACCEL].copy()  # x, y, z
+				pelvis_gyro = exo_data_new[:, S_PELVIS_GYRO].copy()  # x, y, z
+				thigh_l_accel = exo_data_new[:, S_THIGH_L_ACCEL].copy() # x, y, z
+				thigh_l_gyro = exo_data_new[:, S_THIGH_L_GYRO].copy() # x, y, z
+				thigh_r_accel = exo_data_new[:, S_THIGH_R_ACCEL].copy() # x, y, z
+				thigh_r_gyro = exo_data_new[:, S_THIGH_R_GYRO].copy() # x, y, z
 
-				d_hip_sagittal_l_filt = exo_data_interp[:, 2].reshape(-1, 1)
-				d_hip_sagittal_r_filt = exo_data_interp[:, 3].reshape(-1, 1)
-				hip_sagittal_l = exo_data_interp[:, 0].reshape(-1, 1)
-				hip_sagittal_r  = exo_data_interp[:, 1].reshape(-1, 1)
-				pelvis_accel = exo_data_interp[:, 7:10]  # x, y, z
-				pelvis_gyro = exo_data_interp[:, 4:7]  # x, y, z
-				thigh_l_accel = exo_data_interp[:, 10:13] # x, y, z
-				thigh_l_gyro = exo_data_interp[:, 13:16] # x, y, z
-				thigh_r_accel = exo_data_interp[:, 16:19] # x, y, z
-				thigh_r_gyro = exo_data_interp[:, 19:22] # x, y, z
+				# print(exo_data_new[-1, S_COPROC_TIME], exo_data_new[-1, S_EXO_TIME], exo_data_new[-1, S_THIGH_L_GYRO])
 
+				# t = time.perf_counter()
 				# Convert units
 				pelvis_gyro *= ((1000/(2**15)) * (np.pi / 180.)) # rad/s
 				thigh_l_gyro *= ((1000/(2**15)) * (np.pi / 180.)) # rad/s
@@ -239,6 +249,72 @@ def main():
 				thigh_r_gyro = thigh_r_gyro.transpose()
 				thigh_r_accel = thigh_r_accel.transpose()
 
+				exo_data_new[:, S_PELVIS_ACCEL] = pelvis_accel  # x, y, z
+				exo_data_new[:, S_PELVIS_GYRO] = pelvis_gyro  # x, y, z
+				exo_data_new[:, S_THIGH_L_ACCEL] = thigh_l_accel  # x, y, z
+				exo_data_new[:, S_THIGH_L_GYRO] = thigh_l_gyro  # x, y, z
+				exo_data_new[:, S_THIGH_R_ACCEL] = thigh_r_accel  # x, y, z
+				exo_data_new[:, S_THIGH_R_GYRO] = thigh_r_gyro  # x, y, z
+				exo_data_new = exo_data_new[1:, :]
+				# print(time.perf_counter() - t)
+
+				# exo_data = np.delete(exo_data, slice(exo_data_new.shape[0]), axis=0)
+				exo_data = np.append(exo_data, exo_data_new, axis=0)[-buf_len:, :]
+
+				t_end = exo_data[-1, 0] # timestamp assigned by coprocessor NOT exo
+				t_start = t_end - ((interp_len - 1) * DES_S_TIME)
+				t_interp = np.linspace(t_start, t_end, interp_len)
+
+				exo_data_interp = interp_data(t_interp, exo_data[:, 0], exo_data[:, :], dim=0)
+
+				d_hip_sagittal_l_filt = exo_data_interp[:, S_D_HIP_SAGITTAL_L].reshape(-1, 1)
+				d_hip_sagittal_r_filt = exo_data_interp[:, S_D_HIP_SAGITTAL_R].reshape(-1, 1)
+				hip_sagittal_l = exo_data_interp[:, S_HIP_SAGITTAL_L].reshape(-1, 1)
+				hip_sagittal_r  = exo_data_interp[:, S_HIP_SAGITTAL_R].reshape(-1, 1)
+				pelvis_accel = exo_data_interp[:, S_PELVIS_ACCEL]  # x, y, z
+				pelvis_gyro = exo_data_interp[:, S_PELVIS_GYRO]  # x, y, z
+				thigh_l_accel = exo_data_interp[:, S_THIGH_L_ACCEL] # x, y, z
+				thigh_l_gyro = exo_data_interp[:, S_THIGH_L_GYRO] # x, y, z
+				thigh_r_accel = exo_data_interp[:, S_THIGH_R_ACCEL] # x, y, z
+				thigh_r_gyro = exo_data_interp[:, S_THIGH_R_GYRO] # x, y, z
+
+				# print(d_hip_sagittal_l_filt[-1, :], hip_sagittal_l[-1, :], pelvis_accel[-1, :], pelvis_gyro[-1, :], thigh_l_accel[-1, :], thigh_l_gyro[-1, :])
+
+				# Convert units
+				# t = time.perf_counter()
+				# pelvis_gyro *= ((1000/(2**15)) * (np.pi / 180.)) # rad/s
+				# thigh_l_gyro *= ((1000/(2**15)) * (np.pi / 180.)) # rad/s
+				# thigh_r_gyro *= ((1000/(2**15)) * (np.pi / 180.)) # rad/s
+				# pelvis_accel *= ((4/(2**15)) * 9.81) # m/s2
+				# thigh_l_accel *= ((4/(2**15)) * 9.81) # m/s2
+				# thigh_r_accel *= ((4/(2**15)) * 9.81) # m/s2
+
+				# # Transform IMU data to original frame
+				# pelvis_gyro = pelvis_transform.rotate(pelvis_gyro.transpose())
+				# pelvis_accel = pelvis_transform.rotate(pelvis_accel.transpose())
+				# pelvis_ang_accel = np.diff(pelvis_gyro, axis=1) / 0.005 # Assuming data is at 200 Hz
+				# pelvis_ang_accel = np.concatenate((pelvis_ang_accel[:, 0].reshape(-1, 1), pelvis_ang_accel), axis=1) # Repeat first value so arrays are the same length
+				# pelvis_accel = pelvis_transform.translate_accel(pelvis_accel, pelvis_gyro, pelvis_ang_accel)
+				# pelvis_gyro = pelvis_gyro.transpose()
+				# pelvis_accel = pelvis_accel.transpose()
+
+				# thigh_l_gyro = thigh_l_transform.rotate(thigh_l_gyro.transpose())
+				# thigh_l_accel = thigh_l_transform.rotate(thigh_l_accel.transpose())
+				# thigh_l_ang_accel = np.diff(thigh_l_gyro, axis=1) / 0.005 # Assuming data is at 200 Hz
+				# thigh_l_ang_accel = np.concatenate((thigh_l_ang_accel[:, 0].reshape(-1, 1), thigh_l_ang_accel), axis=1) # Repeat first value so arrays are the same length
+				# thigh_l_accel = thigh_l_transform.translate_accel(thigh_l_accel, thigh_l_gyro, thigh_l_ang_accel)
+				# thigh_l_gyro = thigh_l_gyro.transpose()
+				# thigh_l_accel = thigh_l_accel.transpose()
+
+				# thigh_r_gyro = thigh_r_transform.rotate(thigh_r_gyro.transpose())
+				# thigh_r_accel = thigh_r_transform.rotate(thigh_r_accel.transpose())
+				# thigh_r_ang_accel = np.diff(thigh_r_gyro, axis=1) / 0.005 # Assuming data is at 200 Hz
+				# thigh_r_ang_accel = np.concatenate((thigh_r_ang_accel[:, 0].reshape(-1, 1), thigh_r_ang_accel), axis=1) # Repeat first value so arrays are the same length
+				# thigh_r_accel = thigh_r_transform.translate_accel(thigh_r_accel, thigh_r_gyro, thigh_r_ang_accel)
+				# thigh_r_gyro = thigh_r_gyro.transpose()
+				# thigh_r_accel = thigh_r_accel.transpose()
+
+				# print(time.perf_counter() - t)
 				# Sorted Input Order: d_hip_sagittal_filt, hip_sagittal, pelvis_accel_x, pelvis_accel_y, pelvis_accel_z, pelvis_gyro_x, pelvis_gyro_y, pelvis_gyro_z, thigh_accel_x, thigh_accel_y, thigh_accel_z, thigh_gyro_x, thigh_gyro_y, thigh_gyro_z
 				model_input_r = np.concatenate((d_hip_sagittal_r_filt, hip_sagittal_r, pelvis_accel, pelvis_gyro, thigh_r_accel, thigh_r_gyro), axis=1).transpose()
 								
@@ -255,6 +331,7 @@ def main():
 				model_input = np.ascontiguousarray(np.concatenate((model_input_r, model_input_l), axis=0)).astype('float32')
 
 				trq = trq_est.predict(model_input)
+				trq = trq_filter.filter(trq, axis=0) * 66 * 0.10  # filter torque estimates and scale to body mass and assistance percentage
 				trq_r = trq[0, 0]
 				trq_l = trq[0, 1]
 
