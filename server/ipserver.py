@@ -28,3 +28,18 @@ class ServerTCP(object):
 		recv_socket.close()
 		print('Client connected!')
 		return
+
+if __name__=="__main__":
+	print('Initializing server.')
+	server = ServerTCP('', 8080)
+	server.start_server()
+
+	while True:
+		msg = server.from_client()
+		if any(msg):
+			msg = msg.decode()
+			print(f'Received: {msg}')
+			break
+
+	print(f'Sending: {msg}')
+	server.to_client(msg)
