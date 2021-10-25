@@ -69,25 +69,36 @@ def interp_data(x_new, x, y, dim=0):
 		return y
 
 data_dir = './data'
-custom_file_name = 'pilot01_zi_2.txt'
-orig_file_name = 'orig_exo_1.txt'
 
-df_custom = pd.read_csv(data_dir + '/' + custom_file_name, header=None, index_col=None)
-df_custom.columns = ['hip_sagittal_l', 'hip_sagittal_r', 'd_hip_sagittal_l_raw', 'd_hip_sagittal_r_raw', \
-	'pelvis_gyro_x', 'pelvis_gyro_y', 'pelvis_gyro_z', 'pelvis_accel_x', 'pelvis_accel_y', 'pelvis_accel_z', \
-	'thigh_r_accel_x', 'thigh_r_accel_y', 'thigh_r_accel_z', 'thigh_r_gyro_x', 'thigh_r_gyro_y', 'thigh_r_gyro_z', \
-	'thigh_l_accel_x', 'thigh_l_accel_y', 'thigh_l_accel_z', 'thigh_l_gyro_x', 'thigh_l_gyro_y', 'thigh_l_gyro_z', \
-	'time', 'none']
-df_custom.loc[:, 'time'] /= 1000
-for v in df_custom.columns:
-	if 'pelvis_accel' in v:
-		df_custom[v] *= ((4/(2**15)) * 9.81) # m/s^2
-	elif 'pelvis_gyro' in v:
-		df_custom[v] *= ((1000/(2**15)) * (np.pi / 180.)) # rad/s
-	elif 'thigh_r_accel' in v or 'thigh_l_accel' in v:
-		df_custom[v] *= (4/(2**15)) # G's
-	elif 'thigh_r_gyro' in v or 'thigh_l_gyro' in v:
-		df_custom[v] *= (1000/(2**15)) # deg/s
+# custom_file_name = 'pilot01_zi_2.txt'
+# orig_file_name = 'orig_exo_1.txt'
+custom_file_name = 'pilot02_custom_2.txt'
+orig_file_name = 'pilot02_orig_1.txt'
+
+if orig_file_name == 'orig_exo_1.txt':
+	df_custom = pd.read_csv(data_dir + '/' + custom_file_name, header=None, index_col=None)
+	df_custom.columns = ['hip_sagittal_l', 'hip_sagittal_r', 'd_hip_sagittal_l_raw', 'd_hip_sagittal_r_raw', \
+		'pelvis_gyro_x', 'pelvis_gyro_y', 'pelvis_gyro_z', 'pelvis_accel_x', 'pelvis_accel_y', 'pelvis_accel_z', \
+		'thigh_r_accel_x', 'thigh_r_accel_y', 'thigh_r_accel_z', 'thigh_r_gyro_x', 'thigh_r_gyro_y', 'thigh_r_gyro_z', \
+		'thigh_l_accel_x', 'thigh_l_accel_y', 'thigh_l_accel_z', 'thigh_l_gyro_x', 'thigh_l_gyro_y', 'thigh_l_gyro_z', \
+		'time', 'none']
+	df_custom.loc[:, 'time'] /= 1000
+	for v in df_custom.columns:
+		if 'pelvis_accel' in v:
+			df_custom[v] *= ((4/(2**15)) * 9.81) # m/s^2
+		elif 'pelvis_gyro' in v:
+			df_custom[v] *= ((1000/(2**15)) * (np.pi / 180.)) # rad/s
+		elif 'thigh_r_accel' in v or 'thigh_l_accel' in v:
+			df_custom[v] *= (4/(2**15)) # G's
+		elif 'thigh_r_gyro' in v or 'thigh_l_gyro' in v:
+			df_custom[v] *= (1000/(2**15)) # deg/s
+else:
+	df_custom = pd.read_csv(data_dir + '/' + custom_file_name, index_col=None)
+	for v in df_custom.columns:
+		if 'thigh_r_accel' in v or 'thigh_l_accel' in v:
+			df_custom[v] /= 9.81
+		elif 'thigh_r_gyro' in v or 'thigh_l_gyro' in v:
+			df_custom[v] *= (180./np.pi)
 
 df_orig = pd.read_csv(data_dir + '/' + orig_file_name, index_col=None)
 for v in df_orig.columns:
@@ -96,25 +107,31 @@ for v in df_orig.columns:
 	elif 'thigh_r_gyro' in v or 'thigh_l_gyro' in v:
 		df_orig[v] *= (180./np.pi)
 
-pk_loc_custom = find_peaks(df_custom.loc[:, 'hip_sagittal_r'], height=0.2, prominence=0.1)[0]
-df_custom['time'].iloc[:] -= df_custom['time'].iloc[pk_loc_custom[1]]
+# pk_loc_custom = find_peaks(df_custom.loc[:, 'hip_sagittal_r'], height=0.2, prominence=0.1)[0]
+# df_custom['time'].iloc[:] -= df_custom['time'].iloc[pk_loc_custom[1]]
 
-pk_loc_orig = find_peaks(df_orig.loc[:, 'hip_sagittal_r'], height=0.2, prominence=0.1)[0]
-df_orig['time'].iloc[:] -= df_orig['time'].iloc[pk_loc_orig[1]]
+# pk_loc_orig = find_peaks(df_orig.loc[:, 'hip_sagittal_r'], height=0.2, prominence=0.1)[0]
+# df_orig['time'].iloc[:] -= df_orig['time'].iloc[pk_loc_orig[1]]
 
-dt = 0.005
+# dt = 0.005
 
-t_interp_custom = np.arange(0, 10, dt).reshape(-1, 1)
-df_custom = pd.DataFrame(interp_data(t_interp_custom, df_custom['time'].iloc[:], df_custom.values), columns=df_custom.columns)
+# t_interp_custom = np.arange(0, 10, dt).reshape(-1, 1)
+# df_custom = pd.DataFrame(interp_data(t_interp_custom, df_custom['time'].iloc[:], df_custom.values), columns=df_custom.columns)
 
-t_interp_orig = np.arange(0, 10, dt).reshape(-1, 1)
-df_orig = pd.DataFrame(interp_data(t_interp_orig, df_orig['time'].iloc[:], df_orig.values), columns=df_orig.columns)
+# t_interp_orig = np.arange(0, 10, dt).reshape(-1, 1)
+# df_orig = pd.DataFrame(interp_data(t_interp_orig, df_orig['time'].iloc[:], df_orig.values), columns=df_orig.columns)
 
-pelvis_T = np.array([[0.1935, 0.2979, -0.9348, 0.0270], [0.9811, -0.0637, 0.1828, -0.0027], [-0.0051, -0.9525, -0.3046, -0.1205], [0, 0, 0, 1]]) # from original (incorrect) pelvis transform
-# pelvis_T = np.array([[-0.1936, 0.1375, -0.9714, 0.0153], [0.9800, -0.0197, -0.1981, -0.1116], [-0.0463, -0.9903, -0.1309, -0.0269], [0, 0, 0, 1]])
-# thigh_l_T = np.array([[-0.2107, 0.9750, 0.0708, -0.0393], [0.0249, -0.0670, 0.9974, 0.1443], [0.9772, 0.2119, -0.0101, -0.0935], [0, 0, 0, 1]])
-thigh_r_T = np.array([[-0.1948, -0.9749, 0.1082, -0.0173], [-0.3277, -0.0393, -0.9440, -0.1253], [0.9245, -0.2193, -0.3117, -0.1241], [0, 0, 0, 1]])
-thigh_l_T = np.array([[-0.1948, 0.9749, 0.1082, -0.0173], [0.3277, -0.0393, 0.9440, -0.1253], [0.9245, 0.2193, -0.3117, -0.1241], [0, 0, 0, 1]]) # adapted from thigh_r_T
+# # Transforms from marker data
+# pelvis_T = np.array([[0.1935, 0.2979, -0.9348, 0.0270], [0.9811, -0.0637, 0.1828, -0.0027], [-0.0051, -0.9525, -0.3046, -0.1205], [0, 0, 0, 1]]) # from original (incorrect) pelvis transform
+# # pelvis_T = np.array([[-0.1936, 0.1375, -0.9714, 0.0153], [0.9800, -0.0197, -0.1981, -0.1116], [-0.0463, -0.9903, -0.1309, -0.0269], [0, 0, 0, 1]])
+# # thigh_l_T = np.array([[-0.2107, 0.9750, 0.0708, -0.0393], [0.0249, -0.0670, 0.9974, 0.1443], [0.9772, 0.2119, -0.0101, -0.0935], [0, 0, 0, 1]])
+# thigh_r_T = np.array([[-0.1948, -0.9749, 0.1082, -0.0173], [-0.3277, -0.0393, -0.9440, -0.1253], [0.9245, -0.2193, -0.3117, -0.1241], [0, 0, 0, 1]])
+# thigh_l_T = np.array([[-0.1948, 0.9749, 0.1082, -0.0173], [0.3277, -0.0393, 0.9440, -0.1253], [0.9245, 0.2193, -0.3117, -0.1241], [0, 0, 0, 1]]) # adapted from thigh_r_T
+
+# Transforms from metronome walking data
+pelvis_T = np.array([[0.2267, 0.0510, -0.9726, -0.1294], [0.9739, 0.0016, 0.2271, -0.0137], [0.0132, -0.9987, -0.0493, -0.0274], [0, 0, 0, 1]])
+thigh_r_T = np.array([[0.0178, -0.9913, 0.1307, 0.0775], [-0.1337, -0.1319, -0.9822, -0.0110], [0.9909, 0.0000, -0.1349, -0.0260], [0, 0, 0, 1]])
+thigh_l_T = np.array([[-0.2388, 0.9560, 0.1706, 0.0496], [-0.0252, -0.1817, 0.9830, 0.0173], [0.9707, 0.2305, 0.0674, 0.0071], [0, 0, 0, 1]])
 
 pelvis_transform = Transform(pelvis_T)
 thigh_r_transform = Transform(thigh_r_T)
@@ -225,17 +242,17 @@ df_custom['thigh_r_accel_z'] = thigh_r_accel[:, 2]
 # plt.plot(df_custom['thigh_l_gyro_z'])
 # plt.show()
 
-plot_vars = ['hip_sagittal_l', 'hip_sagittal_r', 'd_hip_sagittal_l_raw', 'd_hip_sagittal_r_raw', \
-	'pelvis_gyro_x', 'pelvis_gyro_y', 'pelvis_gyro_z', 'pelvis_accel_x', 'pelvis_accel_y', 'pelvis_accel_z', \
-	'thigh_r_accel_x', 'thigh_r_accel_y', 'thigh_r_accel_z', 'thigh_r_gyro_x', 'thigh_r_gyro_y', 'thigh_r_gyro_z', \
-	'thigh_l_accel_x', 'thigh_l_accel_y', 'thigh_l_accel_z', 'thigh_l_gyro_x', 'thigh_l_gyro_y', 'thigh_l_gyro_z']
-for v in plot_vars:
-	plt.figure()
-	plt.plot(df_orig['time'].iloc[:], df_orig[v].iloc[:])
-	plt.plot(df_custom['time'].iloc[:], df_custom[v].iloc[:])
-	plt.title(v)
-	plt.show()
-# exit()
+# plot_vars = ['hip_sagittal_l', 'hip_sagittal_r', 'd_hip_sagittal_l_raw', 'd_hip_sagittal_r_raw', \
+# 	'pelvis_gyro_x', 'pelvis_gyro_y', 'pelvis_gyro_z', 'pelvis_accel_x', 'pelvis_accel_y', 'pelvis_accel_z', \
+# 	'thigh_r_accel_x', 'thigh_r_accel_y', 'thigh_r_accel_z', 'thigh_r_gyro_x', 'thigh_r_gyro_y', 'thigh_r_gyro_z', \
+# 	'thigh_l_accel_x', 'thigh_l_accel_y', 'thigh_l_accel_z', 'thigh_l_gyro_x', 'thigh_l_gyro_y', 'thigh_l_gyro_z']
+# for v in plot_vars:
+# 	plt.figure()
+# 	plt.plot(df_orig['time'].iloc[:], df_orig[v].iloc[:])
+# 	plt.plot(df_custom['time'].iloc[:], df_custom[v].iloc[:])
+# 	plt.title(v)
+# 	plt.show()
+# # exit()
 
 # plt.plot(df_orig['time'], df_orig['thigh_r_gyro_z'])
 # plt.plot(df_orig['time'], df_orig['thigh_l_gyro_z'])
@@ -246,7 +263,7 @@ for v in plot_vars:
 
 # Test model
 model_dir = './models'
-model_file_name = 'B_S2-14-187_AB05_2.tar'
+model_file_name = 'B_S2-14-187_AB05.tar'
 model_file_path = model_dir + '/' + model_file_name
 
 print('Loading torch model.')
