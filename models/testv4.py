@@ -133,6 +133,10 @@ pelvis_T = np.array([[0.2267, 0.0510, -0.9726, -0.1294], [0.9739, 0.0016, 0.2271
 thigh_r_T = np.array([[0.0178, -0.9913, 0.1307, 0.0775], [-0.1337, -0.1319, -0.9822, -0.0110], [0.9909, 0.0000, -0.1349, -0.0260], [0, 0, 0, 1]])
 thigh_l_T = np.array([[-0.2388, 0.9560, 0.1706, 0.0496], [-0.0252, -0.1817, 0.9830, 0.0173], [0.9707, 0.2305, 0.0674, 0.0071], [0, 0, 0, 1]])
 
+# pelvis_T = np.identity(4)
+# thigh_r_T = np.identity(4)
+# thigh_l_T = np.identity(4)
+
 pelvis_transform = Transform(pelvis_T)
 thigh_r_transform = Transform(thigh_r_T)
 thigh_l_transform = Transform(thigh_l_T)
@@ -252,7 +256,39 @@ df_custom['thigh_r_accel_z'] = thigh_r_accel[:, 2]
 # 	plt.plot(df_custom['time'].iloc[:], df_custom[v].iloc[:])
 # 	plt.title(v)
 # 	plt.show()
-# # exit()
+
+# plot_vars = ['hip_sagittal_*', 'd_hip_sagittal_*_raw', \
+# 	'pelvis_gyro_x', 'pelvis_gyro_y', 'pelvis_gyro_z', 'pelvis_accel_x', 'pelvis_accel_y', 'pelvis_accel_z', \
+# 	'thigh_*_accel_x', 'thigh_*_accel_y', 'thigh_*_accel_z', 'thigh_*_gyro_x', 'thigh_*_gyro_y', 'thigh_*_gyro_z']
+# for v in plot_vars:
+# 	plt.figure()
+# 	if '*' in v:
+# 		for side in ['l', 'r']:
+# 			v_plot = v.replace('*', side)
+# 			if v_plot in ['thigh_l_accel_y', 'thigh_l_gyro_x', 'thigh_l_gyro_z']:
+# 				plt.plot(df_orig['time'].iloc[:], df_orig[v_plot].iloc[:]*-1)
+# 				plt.plot(df_custom['time'].iloc[:], df_custom[v_plot].iloc[:]*-1)
+# 			else:
+# 				plt.plot(df_orig['time'].iloc[:], df_orig[v_plot].iloc[:])
+# 				plt.plot(df_custom['time'].iloc[:], df_custom[v_plot].iloc[:])
+# 			plt.title(v)
+# 		plt.legend(['orig-l', 'custom-l', 'orig-r', 'custom-r'])
+
+# 	else:
+# 		if v in ['pelvis_accel_z', 'pelvis_gyro_x', 'pelvis_gyro_y']:
+# 			plt.plot(df_orig['time'].iloc[:], df_orig[v].iloc[:]*-1)
+# 			plt.plot(df_custom['time'].iloc[:], df_custom[v].iloc[:]*-1)
+# 			plt.plot(df_orig['time'].iloc[:], df_orig[v].iloc[:])
+# 			plt.plot(df_custom['time'].iloc[:], df_custom[v].iloc[:])
+# 			plt.legend(['orig-l', 'custom-l', 'orig-r', 'custom-r'])
+
+# 		else:
+# 			plt.plot(df_orig['time'].iloc[:], df_orig[v].iloc[:])
+# 			plt.plot(df_custom['time'].iloc[:], df_custom[v].iloc[:])
+# 			plt.legend(['orig', 'custom'])
+# 	plt.show()
+
+# exit()
 
 # plt.plot(df_orig['time'], df_orig['thigh_r_gyro_z'])
 # plt.plot(df_orig['time'], df_orig['thigh_l_gyro_z'])
@@ -263,7 +299,7 @@ df_custom['thigh_r_accel_z'] = thigh_r_accel[:, 2]
 
 # Test model
 model_dir = './models'
-model_file_name = 'B_S2-14-187_AB05.tar'
+model_file_name = 'B_S2-14-187_AB05_2.tar'
 model_file_path = model_dir + '/' + model_file_name
 
 print('Loading torch model.')
@@ -334,4 +370,16 @@ with torch.no_grad():
 
 plt.plot(trq_r_custom)
 plt.plot(trq_l_custom)
+plt.show()
+
+from filters import Butterworth
+trq_filter = Butterworth(1, 10, fs=50, n_cols=4)
+trq_filt = trq_filter.filter(np.concatenate((trq_r_orig, trq_l_orig, trq_r_custom, trq_l_custom), axis=1), axis=0)
+
+print(trq_filt.shape)
+
+plt.plot(trq_filt[:, 0])
+plt.plot(trq_filt[:, 1])
+plt.plot(trq_filt[:, 2])
+plt.plot(trq_filt[:, 3])
 plt.show()
