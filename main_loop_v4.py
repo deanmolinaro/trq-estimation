@@ -181,7 +181,7 @@ def main():
 		# pelvis_transform = Transform(pelvis_T)
 		# thigh_r_transform = Transform(thigh_r_T)
 		# thigh_l_transform = Transform(thigh_l_T)
-		trq_filter = Butterworth(1, 10, fs=50, n_cols=2)
+		trq_filter = Butterworth(1, 10, fs=100, n_cols=2)
 
 		buf_len = int(1/DES_S_TIME) # set up data buffers to hold ~1 second of data
 		exo_data = np.zeros((buf_len, Q_EXO_INF_SIZE))
