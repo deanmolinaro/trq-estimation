@@ -123,11 +123,6 @@ def main():
 		if not path.exists('log'): makedirs('log')
 		f_name = input('Please enter log file name: ')
 
-		print('Initializing IMU logger.')
-		imu_logger = DataLogger('imu_time,thigh_l_accel_x,thigh_l_accel_y,thigh_l_accel_z,thigh_l_gyro_x,thigh_l_gyro_y,thigh_l_gyro_z\
-			,thigh_r_accel_x,thigh_r_accel_y,thigh_r_accel_z,thigh_r_gyro_x,thigh_r_gyro_y,thigh_r_gyro_z,sync')
-		imu_logger.init_file('log/' + f_name + '_imu.txt')
-
 		print('Initializing torque estimator logger.')
 		trq_logger = DataLogger('imu_time, trq_r, trq_l, exo_time')
 		trq_logger.init_file('log/' + f_name + '_trq.txt')
