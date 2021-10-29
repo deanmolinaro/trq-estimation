@@ -39,7 +39,7 @@ class Butterworth(Filter):
         if n_cols > 0:
             self.zi = np.repeat(self.zi, n_cols, axis=0).transpose().reshape(1, 2, -1)
 
-    def filter(self, new_val, axis=-1):
+    def filter(self, new_val, axis=0):
         filtered_val, self.zi = signal.sosfilt(
             sos=self.sos, x=new_val, zi=self.zi, axis=axis)
         return filtered_val
@@ -61,3 +61,34 @@ class MovingAverage(Filter):
 
 def is_sequence(x):
 	return isinstance(x, list) or isinstance(x, np.ndarray)
+
+
+if __name__=="__main__":
+    order = 2
+    fcut = 6
+    fs = 100
+    x = np.sin(np.linspace(0, 2*np.pi, 100)).reshape(-1, 1) + np.random.uniform(-0.1, 0.1, (100, 1))
+
+    print('Testing Butterworth filter methods.')
+
+    # Test one-shot filterting
+    filt = Butterworth(order, fcut, fs=fs, n_cols=1)
+    x_filt = filt.filter(x, axis=0)
+
+    # Test filtering one-at-a-time (2 versions)
+    filt = Butterworth(order, fcut, fs=fs, n_cols=1)
+    x_filt_2 = np.array([filt.filter_one(i) for i in x]).reshape(-1, 1)
+
+    filt = Butterworth(order, fcut, fs=fs, n_cols=1)
+    x_filt_3 = np.array([filt.filter([i])[0] for i in x]).reshape(-1, 1)
+
+    np.testing.assert_allclose(x_filt, x_filt_2)
+    np.testing.assert_allclose(x_filt, x_filt_3)
+    print('Passed!')
+    
+    # from matplotlib import pyplot as plt
+    # plt.plot(x)
+    # plt.plot(x_filt)
+    # plt.plot(x_filt_2)
+    # plt.plot(x_filt_3)
+    # plt.show()
