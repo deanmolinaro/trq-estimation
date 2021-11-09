@@ -127,14 +127,12 @@ def main():
 		trq_logger.init_file('log/' + f_name + '_trq.txt')
 
 		print('Initializing queues.')
-		# q_exo_inf = mp.Queue()
-		# q_trq_inf = mp.Queue()
 		q_trq_save = mp.Queue()
 
 		processes = []
 
 		print('Starting logging process.')
-		trq_log_tuple = (trq_logger, q_trq_save, Q_TRQ_SAVE_SIZE)
+		trq_log_tuple = (trq_logger, q_trq_save, config.Q_TRQ_SAVE_SIZE)
 		log_process = mp.Process(target=run_loggers, args=((trq_log_tuple,)))
 		processes.append(log_process)
 
