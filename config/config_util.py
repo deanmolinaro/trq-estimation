@@ -16,12 +16,12 @@ def exo_data_params():
         'HIP_SAGITTAL_R': {'S': slice(2, 3), 'C': 1.0}   # right hip encoder (rad)
         'D_HIP_SAGITTAL_L': {'S': slice(3, 4), 'C': 1.0}   # left hip encoder velocity (rad)
         'D_HIP_SAGITTAL_R': {'S': slice(4, 5), 'C': 1.0}   # right hip encoder velocity (rad)
-        'PELVIS_ACCEL': {'S': slice(8, 11), 'C': ((4/(2**15)) * 9.81)}  # pelvis accelerometer x, y, z (m/s^2)
-        'PELVIS_GYRO': {'S': slice(5, 8), 'C': ((1000/(2**15)) * (np.pi / 180.))}  # pelvis gyroscope x, y, z (rad/s)
-        'THIGH_L_ACCEL': {'S': slice(17, 20), 'C': (4/(2**15))}  # left thigh accelerometer x, y, z (G's)
-        'THIGH_L_GYRO': {'S': slice(20, 23), 'C': (1000/(2**15))}  # left thigh gyroscope x, y, z (deg/s)
-        'THIGH_R_ACCEL': {'S': slice(11, 14), 'C': (4/(2**15))}  # right thigh accelerometer x, y, z (G's)
-        'THIGH_R_GYRO': {'S': slice(14, 17), 'C': (1000/(2**15))}  # right thigh gyroscope x, y, z (deg/s)
+        'PELVIS_ACCEL': {'S': slice(8, 11), 'C': ((4/(2**15)) * 9.81), 'EXP': ['_X', '_Y', '_Z']}  # pelvis accelerometer x, y, z (m/s^2)
+        'PELVIS_GYRO': {'S': slice(5, 8), 'C': ((1000/(2**15)) * (np.pi / 180.)), 'EXP': ['_X', '_Y', '_Z']}  # pelvis gyroscope x, y, z (rad/s)
+        'THIGH_L_ACCEL': {'S': slice(17, 20), 'C': (4/(2**15)), 'EXP': ['_X', '_Y', '_Z']}  # left thigh accelerometer x, y, z (G's)
+        'THIGH_L_GYRO': {'S': slice(20, 23), 'C': (1000/(2**15)), 'EXP': ['_X', '_Y', '_Z']}  # left thigh gyroscope x, y, z (deg/s)
+        'THIGH_R_ACCEL': {'S': slice(11, 14), 'C': (4/(2**15)), 'EXP': ['_X', '_Y', '_Z']}  # right thigh accelerometer x, y, z (G's)
+        'THIGH_R_GYRO': {'S': slice(14, 17), 'C': (1000/(2**15)), 'EXP': ['_X', '_Y', '_Z']}  # right thigh gyroscope x, y, z (deg/s)
         }
 
 
