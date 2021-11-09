@@ -11,91 +11,87 @@ import digitalio
 from os import path, makedirs, getcwd
 from imu.transforms import Transform
 from utils.filters import Butterworth
+import config.config_util as config_util
+from data_manager import DataManager
 
-DES_S_TIME = 0.005
-Q_IMU_INF_SIZE = 13  # l/r 6-axis IMU + timestamp
-Q_IMU_SAVE_SIZE = Q_IMU_INF_SIZE + 1  # adds sync output
+# DES_S_TIME = 0.005
+# Q_IMU_INF_SIZE = 13  # l/r 6-axis IMU + timestamp
+# Q_IMU_SAVE_SIZE = Q_IMU_INF_SIZE + 1  # adds sync output
+# 
+# # EXO_MSG_SIZE = 11  # l/r enc pos/vel, pelvis 6-axis IMU, exo timestamp
+# EXO_MSG_SIZE = 23 # l/r enc pos/vel, pelvis 6-axis IMU, l/r thigh 6-axis IMU, exo timestamp
+# Q_EXO_INF_SIZE = EXO_MSG_SIZE + 1 # adds coproc timestamp
+# Q_TRQ_SAVE_SIZE = 4 # coproc timestamp, l/r trq, exo timestamp
+# # gc.enable()
 
-# EXO_MSG_SIZE = 11  # l/r enc pos/vel, pelvis 6-axis IMU, exo timestamp
-EXO_MSG_SIZE = 23 # l/r enc pos/vel, pelvis 6-axis IMU, l/r thigh 6-axis IMU, exo timestamp
-Q_EXO_INF_SIZE = EXO_MSG_SIZE + 1 # adds coproc timestamp
-Q_TRQ_SAVE_SIZE = 4 # coproc timestamp, l/r trq, exo timestamp
-# gc.enable()
 
-
-def run_imus(imu_l, imu_r, q_imu_inf, q_imu_save, stamp, sync_pin):
-	sync_prev = 0
-	try:
-		loop_start = stamp.time_start
-		while True:
-			if time.perf_counter()-loop_start >= stamp.s_time:
-					loop_start = time.perf_counter()
-
-					try:
-						imu_data_l = np.array(imu_l.get_imu_data()).reshape(1, -1) # TODO: Using threading here
-					except KeyboardInterrupt:
-						raise KeyboardInterrupt
-					except:
-						reboot_start = time.perf_counter()
-						print('Rebooting left IMU.')
-						imu_l.reboot(block=True)
-						print(f'Left IMU down for {time.perf_counter()-reboot_start} s')
-						continue
-
-					try:
-						imu_data_r = np.array(imu_r.get_imu_data()).reshape(1, -1) # TODO: Using threading here
-					except KeyboardInterrupt:
-						raise KeyboardInterrupt
-					except:
-						reboot_start = time.perf_counter()
-						print('Rebooting right IMU')
-						imu_r.reboot(block=True)
-						print(f'Right IMU down for {time.perf_counter()-reboot_start} s')
-						continue
-
-					# timestamp = np.array([loop_start - time_start]).reshape(1, -1)
-					# imu_data = np.concatenate((timestamp, imu_data_l, imu_data_r), axis=1)
-					imu_data = stamp.timestamp_data(np.concatenate((imu_data_l, imu_data_r), axis=1))
-					q_imu_inf.put_nowait(imu_data)
-						
-					sync = int(sync_pin.value)
-					if sync != sync_prev:
-						print('Last Sync = ' + str(sync))
-						sync_prev = sync
-					q_imu_save.put_nowait(np.concatenate((imu_data, np.array(sync).reshape(1,1)), axis=1))
-	except:
-		print('Imu logging failed.')
-		traceback.print_exc()
-		raise
-
-def run_loggers(imu_logger, trq_logger, q_imu, q_trq, q_imu_size, q_trq_size):
+def run_loggers(logger_tuple):
 	try:
 		while True:
-			if not q_imu.empty():
-				imu_data = get_queue_data(q_imu, q_imu_size)
-				imu_logger.write_to_file(imu_data)
+			for logger_tuple in loggers:
+				logger = log_tuple[0]
+				q = log_tuple[1]
+				q_size = log_tuple[2]
+				if not q.empty():
+					data = get_queue_data(q, q_size)
+					logger.write_to_file(data)
 
-			if not q_trq.empty():
-				trq_data = get_queue_data(q_trq, q_trq_size)
-				trq_logger.write_to_file(trq_data)
+			# if not q_trq.empty():
+			# 	trq_data = get_queue_data(q_trq, q_trq_size)
+			# 	trq_logger.write_to_file(trq_data)
 
 	except:
 		print('Logger failed.')
 		print(traceback.print_exc())
 		raise
 
-def run_server(server, q_exo, q_trq, exo_msg_len, stamp):
+def run_server(confiig, q_cmd_save):
 	try:
+		print('Initializing torque estimator.')
+		trq_est = ModelRT(m_dir = getcwd() + '/models/models')
+		trq_est.test_model(num_tests=5, verbose=True)
+		input_seq_len = trq_est.input_shape[2]
+		input_seq_time = (input_seq_len - 1) / config.TARGET_FREQ_EXO
+
+		print('Initializing server.')
+		server = ServerTCP('', 8080)
+		server.start_server()
+
+		print('Intiializing data manager.')
+		exo_data = DataManager((config.Q_EXO_INF_SIZE, int(1/config.TARGET_FREQ_EXO)))  # Store ~1 second of exo data in buffer
+
+		stamp = Stamp(confiig.TARGET_FREQ_EXO)
+
 		while True:
-			# time_loop = time.perf_counter()
 			# Read and parse any incoming data
 			exo_msg = server.from_client()
 			# exo_msg = '!1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0,11.0!1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0,15.0'
 			if any(exo_msg):
-				exo_data = parse_exo_msg(exo_msg, exo_msg_len)
-				if not exo_data.any(): continue
-				exo_data = stamp.timestamp_data(exo_data)
-				q_exo.put_nowait(exo_data)
+				exo_data_new = parse_exo_msg(exo_msg, config.EXO_MSG_SIZE)
+				if not exo_data_new.any(): continue
+				exo_data_new = stamp.timestamp_data(exo_data_new)
+				
+				for k in config.DATA_PARAMS.keys():
+					s = config.DATA_PARAMS[k]['S']
+					c = config.DATA_PARAMS[k]['C']
+					exo_data_new[:, s] *= c
+
+				exo_data.fifo_append(exo_data_new)
+				exo_data_interp = exo_data.interp('COPROC_TIME', input_seq_time)
+
+				# Now get data for estimator in correct order
+				# Run estimator
+				# Run midlevel controller
+				# Send cmd
+				# Save cmd (or just raw torque est)
+				# Add input to update filter params/delay
+				# Consider filtering hip velocity
+
+				coproc_time = exo_data.get_data('COPROC_TIME', )
+
+				t_end = exo_data[-1, 0] # timestamp assigned by coprocessor NOT exo
+				t_start = t_end - ((interp_len - 1) * DES_S_TIME)
+				t_interp = np.linspace(t_start, t_end, interp_len)
 
 				trq = get_queue_data(q_trq, 2, block=True)
 
@@ -114,71 +110,36 @@ def run_server(server, q_exo, q_trq, exo_msg_len, stamp):
 
 def main():
 	try:
-		# TODO: Add delay, clean up code, remove real-time transforms, check ending comma from exo message
-		print('Initializing torque estimator.')
-		trq_est = ModelRT(m_dir = getcwd() + '/models/models')
-		trq_est.test_model(num_tests=5, verbose=True)
+		config = config_util.load_config_from_args()
 
-		time_start = time.perf_counter()
+		# TODO: Add delay, clean up code, remove real-time transforms, check ending comma from exo message
 		if not path.exists('log'): makedirs('log')
 		f_name = input('Please enter log file name: ')
 
 		print('Initializing torque estimator logger.')
-		trq_logger = DataLogger('imu_time, trq_r, trq_l, exo_time')
+		trq_logger = DataLogger('coproc_time, trq_l, trq_r, exo_time')
 		trq_logger.init_file('log/' + f_name + '_trq.txt')
 
-		# print('Initializing sync pin.')
-		# # Set up sync
-		# sync_pin = digitalio.DigitalInOut(board.D18) # Was D4
-		# sync_pin.direction = digitalio.Direction.INPUT
-		# sync_pin.pull = digitalio.Pull.DOWN
-
-		print('Initializing server.')
-		server = ServerTCP('', 8080)
-		server.start_server()
-
 		print('Initializing queues.')
-		# q_imu_inf = mp.Queue()
-		q_exo_inf = mp.Queue()
-		q_trq_inf = mp.Queue()
-		q_imu_save = mp.Queue()
+		# q_exo_inf = mp.Queue()
+		# q_trq_inf = mp.Queue()
 		q_trq_save = mp.Queue()
 
 		processes = []
-		stamp = Stamp(DES_S_TIME)
-
-		# print('Starting IMU process.')
-		# imu_process = mp.Process(target=run_imus, args=(imu_l, imu_r, q_imu_inf, q_imu_save, stamp, sync_pin,))
-		# processes.append(imu_process)
 
 		print('Starting logging process.')
-		log_process = mp.Process(target=run_loggers, args=(imu_logger, trq_logger, q_imu_save, q_trq_save, Q_IMU_SAVE_SIZE, Q_TRQ_SAVE_SIZE))
+		trq_log_tuple = (trq_logger, q_trq_save, Q_TRQ_SAVE_SIZE)
+		log_process = mp.Process(target=run_loggers, args=((trq_log_tuple,)))
 		processes.append(log_process)
 
 		print('Staring server.')
-		server_process = mp.Process(target=run_server, args=(server, q_exo_inf, q_trq_inf, EXO_MSG_SIZE, stamp,))
+		server_process = mp.Process(target=run_server, args=(config, q_trq_save,))
 		processes.append(server_process)
 
 		[p.start() for p in processes]
 
-		# # Transforms from v4 exo IMU frame to original frame
-		# # # pelvis_T = np.array([[0.1935, 0.2979, -0.9348, 0.0270], [0.9811, -0.0637, 0.1828, -0.0027], [-0.0051, -0.9525, -0.3046, -0.1205], [0, 0, 0, 1]]) # original used for gp_estimator
-		# # pelvis_T = np.array([[-0.1936, 0.1375, -0.9714, 0.0153], [0.9800, -0.0197, -0.1981, -0.1116], [-0.0463, -0.9903, -0.1309, -0.0269], [0, 0, 0, 1]])
-		# # thigh_l_T = np.array([[-0.2107, 0.9750, 0.0708, -0.0393], [0.0249, -0.0670, 0.9974, 0.1443], [0.9772, 0.2119, -0.0101, -0.0935], [0, 0, 0, 1]])
-		# # thigh_r_T = np.array([[-0.1948, -0.9749, 0.1082, -0.0173], [-0.3277, -0.0393, -0.9440, -0.1253], [0.9245, -0.2193, -0.3117, -0.1241], [0, 0, 0, 1]])
-
-		# pelvis_T = np.array([[0.1935, 0.2979, -0.9348, 0.0270], [0.9811, -0.0637, 0.1828, -0.0027], [-0.0051, -0.9525, -0.3046, -0.1205], [0, 0, 0, 1]]) # from original (incorrect) pelvis transform
-		# # pelvis_T = np.array([[-0.1936, 0.1375, -0.9714, 0.0153], [0.9800, -0.0197, -0.1981, -0.1116], [-0.0463, -0.9903, -0.1309, -0.0269], [0, 0, 0, 1]])
-		# # thigh_l_T = np.array([[-0.2107, 0.9750, 0.0708, -0.0393], [0.0249, -0.0670, 0.9974, 0.1443], [0.9772, 0.2119, -0.0101, -0.0935], [0, 0, 0, 1]])
-		# thigh_r_T = np.array([[-0.1948, -0.9749, 0.1082, -0.0173], [-0.3277, -0.0393, -0.9440, -0.1253], [0.9245, -0.2193, -0.3117, -0.1241], [0, 0, 0, 1]])
-		# thigh_l_T = np.array([[-0.1948, 0.9749, 0.1082, -0.0173], [0.3277, -0.0393, 0.9440, -0.1253], [0.9245, 0.2193, -0.3117, -0.1241], [0, 0, 0, 1]]) # adapted from thigh_r_T
-
-		# pelvis_transform = Transform(pelvis_T)
-		# thigh_r_transform = Transform(thigh_r_T)
-		# thigh_l_transform = Transform(thigh_l_T)
 		# trq_filter = Butterworth(1, 10, fs=100, n_cols=2)
 		trq_filter = Butterworth(2, 6, fs=100, n_cols=2)
-
 
 		buf_len = int(1/DES_S_TIME) # set up data buffers to hold ~1 second of data
 		exo_data = np.zeros((buf_len, Q_EXO_INF_SIZE))
@@ -361,7 +322,7 @@ def main():
 
 				q_trq_inf.put_nowait(np.array((trq_d[0, 0], trq_d[0, 1])).reshape(1, -1))
 				# q_trq_inf.put_nowait(np.array((trq_r, trq_l)).reshape(1, -1))
-				q_trq_save.put_nowait(np.array((exo_data[-1, 0], trq_r, trq_l, exo_data[-1, -1])).reshape(1, -1))
+				q_trq_save.put_nowait(np.array((exo_data[-1, 0], trq_l, trq_r, exo_data[-1, -1])).reshape(1, -1))
 
 				# count += 1
 				# if count == 1000:

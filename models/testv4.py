@@ -141,6 +141,8 @@ pelvis_transform = Transform(pelvis_T)
 thigh_r_transform = Transform(thigh_r_T)
 thigh_l_transform = Transform(thigh_l_T)
 
+df_custom_orig = deepcopy(df_custom)
+
 pelvis_gyro = df_custom[['pelvis_gyro_x', 'pelvis_gyro_y', 'pelvis_gyro_z']].values
 pelvis_accel = df_custom[['pelvis_accel_x', 'pelvis_accel_y', 'pelvis_accel_z']].values
 pelvis_gyro = pelvis_transform.rotate(pelvis_gyro.transpose())
@@ -370,7 +372,7 @@ with torch.no_grad():
 
 plt.plot(trq_r_custom)
 plt.plot(trq_l_custom)
-plt.show()
+# plt.show()
 
 from filters import Butterworth
 trq_filter = Butterworth(1, 10, fs=50, n_cols=4)
@@ -378,8 +380,52 @@ trq_filt = trq_filter.filter(np.concatenate((trq_r_orig, trq_l_orig, trq_r_custo
 
 print(trq_filt.shape)
 
-plt.plot(trq_filt[:, 0])
-plt.plot(trq_filt[:, 1])
-plt.plot(trq_filt[:, 2])
-plt.plot(trq_filt[:, 3])
+# plt.plot(trq_filt[:, 0])
+# plt.plot(trq_filt[:, 1])
+# plt.plot(trq_filt[:, 2])
+# plt.plot(trq_filt[:, 3])
+# plt.show()
+
+model_dir = './models'
+model_file_name = 'B_S2-14-187_AB05_Hip4_DR_PerSubject.tar'
+model_file_path = model_dir + '/' + model_file_name
+
+print('Loading torch model.')
+device = torch.device('cpu')
+model_dict = torch.load(model_file_path, map_location=device)
+state_dict = deepcopy(model_dict['state_dict'])
+del model_dict['state_dict']
+model = TCN(**model_dict)
+model.load_state_dict(state_dict)
+model.eval()
+print('Torch model loaded.')
+
+data_r_orig = torch.tensor(df_custom_orig[['d_hip_sagittal_r_raw', 'hip_sagittal_r', \
+'pelvis_accel_x', 'pelvis_accel_y', 'pelvis_accel_z', \
+'pelvis_gyro_x', 'pelvis_gyro_y', 'pelvis_gyro_z', \
+'thigh_r_accel_x', 'thigh_r_accel_y', 'thigh_r_accel_z', \
+'thigh_r_gyro_x', 'thigh_r_gyro_y', 'thigh_r_gyro_z']].values).float()
+num_feat = data_r_orig.shape[1]
+data_r_orig = data_r_orig.T.reshape(1, num_feat, -1)
+
+data_l_orig = deepcopy(df_custom_orig[['d_hip_sagittal_l_raw', 'hip_sagittal_l', \
+'pelvis_accel_x', 'pelvis_accel_y', 'pelvis_accel_z', \
+'pelvis_gyro_x', 'pelvis_gyro_y', 'pelvis_gyro_z', \
+'thigh_l_accel_x', 'thigh_l_accel_y', 'thigh_l_accel_z', \
+'thigh_l_gyro_x', 'thigh_l_gyro_y', 'thigh_l_gyro_z']])
+data_l_orig['thigh_l_accel_y'] *= -1
+data_l_orig['thigh_l_gyro_x'] *= -1
+data_l_orig['thigh_l_gyro_z'] *= -1
+data_l_orig['pelvis_accel_y'] *= -1
+data_l_orig['pelvis_gyro_x'] *= -1
+data_l_orig['pelvis_gyro_z'] *= -1
+data_l_orig = torch.tensor(data_l_orig.values).float()
+data_l_orig = data_l_orig.T.reshape(1, num_feat, -1)
+
+with torch.no_grad():
+	trq_r_orig = model(data_r_orig).numpy()
+	trq_l_orig = model(data_l_orig).numpy()
+
+plt.plot(trq_r_orig)
+plt.plot(trq_l_orig)
 plt.show()
