@@ -35,7 +35,7 @@ def run_loggers(logger_tuple):
 		print(traceback.print_exc())
 		raise
 
-def run_server(confiig, q_cmd_save):
+def run_server(confiig, q_cmd_save, d):
 	try:
 		print('Initializing torque estimator.')
 		trq_est = ModelRT(m_dir = getcwd() + '/models/models')
@@ -54,11 +54,12 @@ def run_server(confiig, q_cmd_save):
 		server.start_server()
 
 		print('Intiializing data managers.')
-		exo_data = DataManager(config.DATA_PARAMS, (config.Q_EXO_INF_SIZE, int(1/config.TARGET_FREQ_EXO)))  # Store ~1 second of exo data in buffer
-		exo_data_interp = DataManager(config.DATA_PARAMS, (config.Q_EXO_INF_SIZE, input_seq_len))  # Store resampled data to input to the model
+		exo_data = DataManager(config.DATA_PARAMS, (int(1/config.TARGET_FREQ_EXO), config.Q_EXO_INF_SIZE))  # Store ~1 second of exo data in buffer
+		exo_data_interp = DataManager(config.DATA_PARAMS, (input_seq_len, config.Q_EXO_INF_SIZE))  # Store resampled data to input to the model
 
 		print('Intiailizing mid-level controller.')
-		midlevel = FilterAndDelayCmd(order=config.ORDER, f_cut=config.F_CUT, delay=config.DELAY, fs=config.TARGET_FREQ_COPROC)
+		delay = d.value
+		midlevel = FilterAndDelayCmd(order=config.ORDER, f_cut=config.F_CUT, delay=delay, fs=config.TARGET_FREQ_COPROC)
 
 		stamp = Stamp(confiig.TARGET_FREQ_EXO)
 
@@ -109,6 +110,11 @@ def run_server(confiig, q_cmd_save):
 
 				q_trq_save.put_nowait(np.array((exo_data.get_data('COPROC_TIME')[-1], trq[0, 0], trq[0, 1], exo_data.get_data('EXO_TIME')[-1]), axis=1).reshape(1, -1))
 
+				if delay != d.value:
+					delay = d.value
+					midlevel.update_delay(delay)
+					print(f'Updated delay to {delay}!')
+
 	except:
 		print('Server failed.')
 		print(traceback.print_exc())
@@ -126,8 +132,9 @@ def main():
 		trq_logger = DataLogger('coproc_time, trq_l, trq_r, exo_time')
 		trq_logger.init_file('log/' + f_name + '_trq.txt')
 
-		print('Initializing queues.')
+		print('Initializing shared queues.')
 		q_trq_save = mp.Queue()
+		d = mp.Value('i', config.DELAY)
 
 		processes = []
 
@@ -137,14 +144,13 @@ def main():
 		processes.append(log_process)
 
 		print('Staring server.')
-		server_process = mp.Process(target=run_server, args=(config, q_trq_save,))
+		server_process = mp.Process(target=run_server, args=(config, q_trq_save, d))
 		processes.append(server_process)
 
 		[p.start() for p in processes]
 
 		while True:
-			pass
-			# TODO: Add updating delay and filter params here
+			d.value = input('Update delay (max delay of 49): ')
 
 	except:
 			# Print traceback

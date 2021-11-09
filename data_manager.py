@@ -59,11 +59,15 @@ class FilterAndDelayCmd(MidLevelController):
 		self.delay = delay
 		self.num_acts = num_acts
 		self.filter = Butterworth(2, 6, fs=100, n_cols=num_acts)
-		self.buf = np.zeros((delay, num_acts))
+		self.buf_len = 50
+		self.buf = np.zeros((self.buf_len, num_acts))
 
 	def update(self, data):
 		data = self.filter(data, axis=0)
-		self.buf = np.concatenate((self.buf, data), axis=0)[-self.delay:, self.num_acts].reshape(-1, self.num_acts)
+		self.buf = np.concatenate((self.buf, data), axis=0)[-self.buf_len:, self.num_acts]
+
+	def update_delay(self, delay):
+		self.delay = delay
 
 	def get_cmd(self):
-		return self.buf[0, :].reshape(-1, self.num_acts)
+		return self.buf[-(self.delay+1), :].reshape(-1, self.num_acts)
