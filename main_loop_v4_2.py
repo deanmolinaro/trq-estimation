@@ -15,10 +15,10 @@ import config.config_util as config_util
 from data_manager import DataManager
 
 
-def run_loggers(logger_tuple):
+def run_loggers(loggers):
 	try:
 		while True:
-			for logger_tuple in loggers:
+			for log_tuple in loggers:
 				logger = log_tuple[0]
 				q = log_tuple[1]
 				q_size = log_tuple[2]
@@ -35,10 +35,10 @@ def run_loggers(logger_tuple):
 		print(traceback.print_exc())
 		raise
 
-def run_server(confiig, q_cmd_save, d):
+def run_server(config, m_dir, m_file, q_cmd_save, d, trq_est):
 	try:
 		print('Initializing torque estimator.')
-		trq_est = ModelRT(m_dir = getcwd() + '/models/models')
+		# trq_est = ModelRT(m_dir=m_dir, m_file=m_file)
 		trq_est.test_model(num_tests=5, verbose=True)
 		input_seq_len = trq_est.input_shape[2]
 		input_seq_time = (input_seq_len - 1) / config.TARGET_FREQ_EXO
@@ -124,6 +124,11 @@ def main():
 	try:
 		config = config_util.load_config_from_args()
 
+		m_dir = getcwd() + '/models/models'
+		# m_file = ModelRT.choose_model(m_dir)
+		m_file = ''
+		trq_est = ModelRT(m_dir=m_dir)
+
 		# TODO: Add delay, clean up code, remove real-time transforms, check ending comma from exo message
 		if not path.exists('log'): makedirs('log')
 		f_name = input('Please enter log file name: ')
@@ -140,11 +145,13 @@ def main():
 
 		print('Starting logging process.')
 		trq_log_tuple = (trq_logger, q_trq_save, config.Q_TRQ_SAVE_SIZE)
-		log_process = mp.Process(target=run_loggers, args=((trq_log_tuple,)))
+		loggers = (trq_log_tuple,)
+		# log_process = mp.Process(target=run_loggers, args=(((trq_log_tuple,),)))
+		log_process = mp.Process(target=run_loggers, args=(loggers,))
 		processes.append(log_process)
 
 		print('Staring server.')
-		server_process = mp.Process(target=run_server, args=(config, q_trq_save, d))
+		server_process = mp.Process(target=run_server, args=(config, m_dir, m_file, q_trq_save, d, trq_est))
 		processes.append(server_process)
 
 		[p.start() for p in processes]

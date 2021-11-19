@@ -90,6 +90,7 @@ def run_server(server, q_exo, q_trq, exo_msg_len, stamp):
 			# time_loop = time.perf_counter()
 			# Read and parse any incoming data
 			exo_msg = server.from_client()
+			# print(exo_msg)
 			# exo_msg = '!1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0,11.0!1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0,15.0'
 			if any(exo_msg):
 				exo_data = parse_exo_msg(exo_msg, exo_msg_len)
@@ -190,7 +191,7 @@ def main():
 		# interp_len = trq_est_r.input_shape[2]
 		interp_len = trq_est.input_shape[2]
 
-		delay = 3
+		delay = 1
 		trq_d = np.zeros((delay, 2)).reshape(-1, 2)
 
 		# count = 0
@@ -357,11 +358,12 @@ def main():
 				model_input = np.ascontiguousarray(np.concatenate((model_input_r, model_input_l), axis=0)).astype('float32')
 
 				trq = trq_est.predict(model_input)
-				trq = trq_filter.filter(trq, axis=0)  # filter torque estimates and scale to body mass and assistance percentage
 				trq_r = trq[0, 0]
 				trq_l = trq[0, 1]
 
-				trq_d = np.concatenate((trq_d, np.array([trq_r, trq_l]).reshape(-1, 2)), axis=0)
+				trq = trq_filter.filter(trq, axis=0)  # filter torque estimates and scale to body mass and assistance percentage
+
+				trq_d = np.concatenate((trq_d, np.array([trq[0, 0], trq[0, 1]]).reshape(-1, 2)), axis=0)
 				trq_d = trq_d[-delay:, :].reshape(-1, 2)
 
 				q_trq_inf.put_nowait(np.array((trq_d[0, 0], trq_d[0, 1])).reshape(1, -1))
