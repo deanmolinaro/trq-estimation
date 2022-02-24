@@ -1,8 +1,12 @@
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import config_util
 config = config_util.ConfigurableConstants()
-config.SWING_SLACK = 8000
-config.TASK = config_util.Task.BILATERALSTANDINGPERTURBATION
-config.STANCE_CONTROL_STYLE = config_util.StanceCtrlStyle.FOURPOINTSPLINE
+# config.SWING_SLACK = 8000
+# config.TASK = config_util.Task.BILATERALSTANDINGPERTURBATION
+# config.STANCE_CONTROL_STYLE = config_util.StanceCtrlStyle.FOURPOINTSPLINE
 
 
 ''' Here are the variables that are updatable in config, and their defaults:

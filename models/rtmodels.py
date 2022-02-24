@@ -8,7 +8,7 @@ from os import listdir, getcwd
 class ModelRT(object):
 	def __init__(self, m_file='', m_dir='', input_shape=None):
 		self.m_dir = m_dir if any(m_dir) else None
-		self.m_file = m_file if any(m_file) else self.choose_model()
+		self.m_file = m_file if any(m_file) else self.choose_model(m_dir=self.m_dir)
 		self.m_filepath = self.m_dir + '/' + self.m_file if self.m_dir else self.m_file
 		print(f'Loading {self.m_file}.')
 
@@ -19,8 +19,9 @@ class ModelRT(object):
 
 		self.init_model()
 
-	def choose_model(self):
-		m_files = [f for f in listdir(self.m_dir) if '.trt' in f]
+	@staticmethod
+	def choose_model(m_dir):
+		m_files = [f for f in listdir(m_dir) if '.trt' in f]
 
 		print()
 		for i, m_file in enumerate(m_files):
