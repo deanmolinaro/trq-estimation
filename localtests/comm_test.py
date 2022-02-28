@@ -4,6 +4,7 @@ import time
 
 
 client = ClientTCP('192.168.1.2', 8080)
+print('Starting!')
 num_vals = 22
 
 start_time = time.perf_counter()
