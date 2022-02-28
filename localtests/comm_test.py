@@ -3,7 +3,7 @@ import random
 import time
 
 
-client = ClientTCP('192.168.1.2', 8080)
+client = ClientTCP('192.168.1.2', 50050)
 print('Starting!')
 num_vals = 22
 

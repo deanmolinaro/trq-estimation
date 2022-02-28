@@ -3,7 +3,7 @@
 # TODO: Set up server - done
 # TODO: Check model with saved data
 # TODO: Update with asyncio
-# TODO: Add filter. Also need to add something to figure out output frequency.
+# TODO: Add filter. Also need to add something to figure out output frequency. Clean up import.
 # TODO: Update for blocking
 
 import multiprocessing as mp
@@ -14,6 +14,7 @@ from control import midlevel
 import numpy as np
 from typing import Callable
 import time
+import filters
 
 
 class FifoBuffer():
@@ -132,6 +133,11 @@ class Estimator():
 		else:
 			self.model = None
 
+		if config.FILT:
+			self.filt = filters.Butterworth(config.ORDER, config.F_CUT, fs = config.EXO_FREQ, n_cols = num_outputs)
+		else:
+			self.filt = None
+
 	def update(self, request: dict) -> None:
 		# Update exo data instance with latest message
 		for i in range(request.shape[0]):
@@ -164,6 +170,8 @@ class Estimator():
 		) -> None:
 
 		# model_out = filter.filter(model_out)  # TODO: Filter torque estimates based on filter params in config
+		if self.config.FILT:
+			model_out = self.filt.filter(model_out.reshape(1, -1)).reshape(-1)
 
 		# Add any final conversions to the torque estimate (e.g., flip flexion/extension)
 		for k in config.MODEL_INPUTS_OUTPUTS.keys():
@@ -177,7 +185,16 @@ class Estimator():
 	def get_cmd(self, idx: int) -> float:
 
 		if not self.exo_data.is_col('control'):
-			return self.output_data.get_last_row()[idx]
+			trq = self.output_data.get_col(idx)
+			scale = 1
+			delay = 40
+			t = self.output_data.get_last_col()
+			t_des = self.exo_data.get_last_vals_by_name(('exo_time',))[0] - delay
+			cmd = midlevel.delay_scale(trq, t, t_des, scale)
+			# cmd = self.output_data.get_last_row()[idx]
+			return cmd
+
+			# return self.output_data.get_last_row()[idx]
 
 		controller = self.exo_data.get_last_vals_by_name(('control',))[0]
 		if controller == 1:
@@ -224,8 +241,8 @@ def parse_msg(msg):
 
 
 def package_msg(msg):
-	pkg_msg = ["{:.5f}".format(m) for m in msg]
-	return "!" + ",".join(pkg_msg) + "&\r\n"
+	pkg_msg = ["{:.3f}".format(m) for m in msg]
+	return "!" + ",".join(pkg_msg) + "&"
 
 
 def parse_q(q, block = False):
@@ -271,15 +288,16 @@ def main(config):
 	q_exo_inf = mp.Queue()
 	q_trq_inf = mp.Queue()
 
+	print('Loading model.')
+	model = rtmodels.ModelRT(m_file = config.M_FILE, m_dir = config.M_DIR)
+	model.test_model(num_tests = 5, verbose = True)
+
 	print('Staring server.')
+	processes = []
 	server_process = mp.Process(target=run_server, args=(config, q_exo_inf, q_trq_inf))
 	processes.append(server_process)
 
 	[p.start() for p in processes]
-
-	print('Loading model.')
-	model = rtmodels.ModelRT(m_file = config.M_FILE, m_dir = config.M_DIR)
-	model.test_model(num_tests = 5, verbose = True)
 
 	while True:
 
@@ -291,7 +309,7 @@ def main(config):
 			q_trq_inf.put_nowait((model_out, timestamp))
 
 		else:
-			estimator.model.predict_rand()  # TODO: Update this with asyncio
+			model.predict_rand()  # TODO: Update this with asyncio
 
 
 if __name__ == '__main__':
