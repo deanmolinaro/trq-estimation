@@ -6,6 +6,7 @@
 # TODO: Add filter. Also need to add something to figure out output frequency. Clean up import.
 # TODO: Update for blocking
 
+import traceback
 import multiprocessing as mp
 from config import config_util
 from models import rtmodels
@@ -221,6 +222,8 @@ class Estimator():
 			conv = self.config.EXO_INPUTS[k]['CONV']
 			parsed_request[k] = request[idx] * conv
 
+			print(k, idx, conv, request[idx], parsed_request[k])
+
 		return parsed_request
 
 	def update_output_from_q(self, q, block = False):
@@ -235,12 +238,14 @@ class Estimator():
 
 def parse_msg(msg):
 	if msg:
+		print('Received', msg)
 		return np.array([[float(value) for value in m.split(',')[:-1]] for m in msg.split('!')[1:]]) # Ignore anything before the first ! (this should just be empty)
 	else:
 		return None
 
 
 def package_msg(msg):
+	print('Sending', msg)
 	pkg_msg = ["{:.3f}".format(m) for m in msg]
 	return "!" + ",".join(pkg_msg) + "&"
 
@@ -264,24 +269,30 @@ def run_server(config, q_exo_inf, q_trq_inf):
 	server = ServerTCP('', config.PORT)
 	server.start_server()
 
-	while True:
-		# Read and parse any incoming data
-		request = parse_msg(server.from_client())
+	try:
 
-		if request is not None:
-			estimator.update(request)
+		while True:
+			# Read and parse any incoming data
+			request = parse_msg(server.from_client())
 
-			# Make sure output q is empty before blocking for newest estimate
-			if config.BLOCK:
-				estimator.update_output_from_q(q_trq_inf, block = False)
+			if request is not None:
+				estimator.update(request)
 
-			q_exo_inf.put_nowait(estimator.get_model_input())
-			estimator.update_output_from_q(q_trq_inf, block = config.BLOCK)
-			response = estimator.get_response(request)
-			server.to_client(package_msg(response))
+				# Make sure output q is empty before blocking for newest estimate
+				if config.BLOCK:
+					estimator.update_output_from_q(q_trq_inf, block = False)
 
-		estimator.update_output_from_q(q_trq_inf, block = False)  # TODO: Check how blocking works. Check if sending the same message twice.
+				q_exo_inf.put_nowait(estimator.get_model_input())
+				estimator.update_output_from_q(q_trq_inf, block = config.BLOCK)
+				response = estimator.get_response(request)
+				server.to_client(package_msg(response))
 
+			estimator.update_output_from_q(q_trq_inf, block = False)  # TODO: Check how blocking works. Check if sending the same message twice.
+
+	except:
+		# Close server
+		print('Closing server.')
+		server.close()
 
 def main(config):
 	print('Initializing queues.')
@@ -292,25 +303,37 @@ def main(config):
 	model = rtmodels.ModelRT(m_file = config.M_FILE, m_dir = config.M_DIR)
 	model.test_model(num_tests = 5, verbose = True)
 
-	print('Staring server.')
-	processes = []
-	server_process = mp.Process(target=run_server, args=(config, q_exo_inf, q_trq_inf))
-	processes.append(server_process)
+	try:
+		print('Staring server.')
+		processes = []
+		server_process = mp.Process(target=run_server, args=(config, q_exo_inf, q_trq_inf))
+		processes.append(server_process)
 
-	[p.start() for p in processes]
+		[p.start() for p in processes]
 
-	while True:
+		while True:
 
-		if not q_exo_inf.empty():
-			q_data = parse_q(q_exo_inf, block = False)
-			model_in = q_data[-1][0]
-			timestamp = q_data[-1][1]
-			model_out = model.predict(model_in)[-1]  # TODO: Make sure model output is flattened if multiple outputs for single input
-			q_trq_inf.put_nowait((model_out, timestamp))
+			if not q_exo_inf.empty():
+				q_data = parse_q(q_exo_inf, block = False)
+				model_in = q_data[-1][0]
+				print(model_in[0, :, -1])
+				print(model_in[1, :, -1])
+				timestamp = q_data[-1][1]
+				model_out = model.predict(model_in)[-1]  # TODO: Make sure model output is flattened if multiple outputs for single input
+				q_trq_inf.put_nowait((model_out, timestamp))
 
-		else:
-			model.predict_rand_breakable(exit_func = lambda: not q_exo_inf.empty)  # TODO: Update with breakable stream
+			else:
+				model.predict_rand_breakable(exit_func = lambda: not q_exo_inf.empty)  # TODO: Update with breakable stream
+	except:
+		# Print traceback
+		traceback.print_exc()
 
+		# Close processes
+		[p.join() for p in processes]
+
+		print('Exiting!')
+
+		return
 
 if __name__ == '__main__':
 	print(f'Running {__file__}.')
