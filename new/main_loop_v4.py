@@ -1,5 +1,5 @@
 # TODO: Add logging
-# TODO: Add correct model
+# TODO: Add correct model - done
 # TODO: Set up server - done
 # TODO: Check model with saved data
 # TODO: Update with asyncio
@@ -11,6 +11,8 @@ from models import rtmodels
 from tcpip.tcpip import ServerTCP
 from control import midlevel
 import numpy as np
+from typing import Callable
+import time
 
 
 class FifoBuffer():
@@ -81,7 +83,7 @@ class ExoData(FifoBuffer):
 		return np.ascontiguousarray(data).astype('float32')
 
 	def get_tcn_inputs_by_dict(self, col_dict, nested=False):
-		sorted_keys = self.get_sorted_keys(d)
+		sorted_keys = self.get_sorted_keys(col_dict)
 
 		if nested:
 			data = np.concatenate([self.get_tcn_inputs_by_dict(col_dict[k]['INPUTS'], nested=False) for k in sorted_keys], axis=0)
@@ -96,8 +98,8 @@ class ExoData(FifoBuffer):
 	def get_cols_by_dict(self, col_dict, sorted_keys = None):
 		if not sorted_keys:
 			sorted_keys = self.get_sorted_keys(col_dict)
-		data = [self.data[:, self.d_idx[k]] * col_dict[k]['CONV'] for k in sorted_keys]
-		return np.concatenate(data, axis=1)
+		data = np.concatenate([self.data[:, self.d_idx[k]] * col_dict[k]['CONV'] for k in sorted_keys])
+		return data
 
 	def get_last_vals_by_name(self, col_names):
 		return self.get_cols_by_name(col_names)[-1, :]
@@ -117,6 +119,9 @@ class ExoData(FifoBuffer):
 
 class Estimator():
 	def __init__(self, config: config_util.ConfigurableConstants):
+		self.config = config
+
+		num_outputs = len(config.MODEL_INPUTS_OUTPUTS)
 		self.exo_data = ExoData(h = config.BUF_LEN)
 		self.output_data = FifoBuffer(config.BUF_LEN, num_outputs + 1)  # Last column is for timestamp
 
@@ -125,8 +130,9 @@ class Estimator():
 
 	def update(self, request: dict) -> None:
 		# Update exo data instance with latest message
-		parsed_request = self.parse_request(request)
-		self.exo_data.update_last_row_from_dict(parsed_request, add_row = True)
+		for i in range(request.shape[0]):
+			parsed_request = self.parse_request(request[i, :])
+			self.exo_data.update_last_row_from_dict(parsed_request, add_row = True)
 
 	def step(self):
 		# Run inference then update output_data
@@ -216,14 +222,14 @@ class Estimator():
 
 def parse_msg(msg):
 	if msg:
-		return np.array([[float(value) for value in msg.split(',')[:-1]] for msg in exo_msg.split('!')[1:]]) # Ignore anything before the first ! (this should just be empty)
+		return np.array([[float(value) for value in m.split(',')[:-1]] for m in msg.split('!')[1:]]) # Ignore anything before the first ! (this should just be empty)
 	else:
 		return None
 
 
 def package_msg(msg):
 	pkg_msg = ["{:.5f}".format(m) for m in msg]
-	return "!" + ",".join(pkg_msg)
+	return "!" + ",".join(pkg_msg) + "&\r\n"
 	
 
 def main(config):
@@ -238,7 +244,14 @@ def main(config):
 		# Read and parse any incoming data
 		request = parse_msg(server.from_client())
 
-		if request:
+		if not request is None:
+			if request[-1, -1] < 1000:
+				print(request[-1, -1])
+			time.sleep(0.001)
+			# server.to_client(f"!0,0,{request[-1,-1]}&\r\n")
+			server.to_client(package_msg([0, 0, request[-1, -1]]))
+			continue
+
 			estimator.update(request)
 			estimator.step()
 
@@ -246,13 +259,16 @@ def main(config):
 			server.to_client(package_msg(response))
 
 		else:
-			estimator.model.predict_rand()  # TODO: Update this with asyncio
+                        continue
+                        estimator.model.predict_rand()  # TODO: Update this with asyncio
 
 
 if __name__ == '__main__':
 	print(f'Running {__file__}.')
 	config = config_util.load_config_from_args()
 	config.BUF_LEN = rtmodels.ModelRT.get_shape_from_name(config.M_FILE)[-1]
+	config.MODEL_INPUTS_OUTPUTS = config.MODEL_INPUTS_OUTPUTS[0]
+	config.EXO_INPUTS = config.EXO_INPUTS[0]
 	main(config)
 
 	print('Exiting.')

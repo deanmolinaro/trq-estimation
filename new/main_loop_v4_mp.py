@@ -185,13 +185,13 @@ class Estimator():
 	def get_cmd(self, idx: int) -> float:
 
 		if not self.exo_data.is_col('control'):
-			trq = self.output_data.get_col(idx)
-			scale = 1
-			delay = 40
-			t = self.output_data.get_last_col()
-			t_des = self.exo_data.get_last_vals_by_name(('exo_time',))[0] - delay
-			cmd = midlevel.delay_scale(trq, t, t_des, scale)
-			# cmd = self.output_data.get_last_row()[idx]
+			# trq = self.output_data.get_col(idx)
+			# scale = 1
+			# delay = 40
+			# t = self.output_data.get_last_col()
+			# t_des = self.exo_data.get_last_vals_by_name(('exo_time',))[0] - delay
+			# cmd = midlevel.delay_scale(trq, t, t_des, scale)
+			cmd = self.output_data.get_last_row()[idx]
 			return cmd
 
 			# return self.output_data.get_last_row()[idx]
@@ -280,7 +280,7 @@ def run_server(config, q_exo_inf, q_trq_inf):
 			response = estimator.get_response(request)
 			server.to_client(package_msg(response))
 
-		estimator.update_output_from_q(q_trq_inf, block = False)
+		estimator.update_output_from_q(q_trq_inf, block = False)  # TODO: Check how blocking works. Check if sending the same message twice.
 
 
 def main(config):
@@ -309,7 +309,7 @@ def main(config):
 			q_trq_inf.put_nowait((model_out, timestamp))
 
 		else:
-			model.predict_rand()  # TODO: Update this with asyncio
+			model.predict_rand_breakable(exit_func = lambda: not q_exo_inf.empty)  # TODO: Update with breakable stream
 
 
 if __name__ == '__main__':

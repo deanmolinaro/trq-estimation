@@ -16,7 +16,7 @@ FROM_DEGS_TO_RADS = np.pi / 180.
 
 def exo_inputs_default():
     return \
-        {
+        ({
             'hip_sagittal_l': {'IDX': 0, 'CONV': 1},
             'hip_sagittal_r': {'IDX': 1, 'CONV': 1},
 
@@ -27,33 +27,33 @@ def exo_inputs_default():
             'pelvis_gyro_y': {'IDX': 5, 'CONV': FROM_15BIT_TO_1000DEGS * FROM_DEGS_TO_RADS},
             'pelvis_gyro_z': {'IDX': 6, 'CONV': FROM_15BIT_TO_1000DEGS * FROM_DEGS_TO_RADS},
 
-            'pelvis_accel_x': {'IDX': 7, 'CONV': FROM_15BIT_TO_4G * FROM_G_TO_MS2},
-            'pelvis_accel_y': {'IDX': 8, 'CONV': FROM_15BIT_TO_4G * FROM_G_TO_MS2},
-            'pelvis_accel_z': {'IDX': 9, 'CONV': FROM_15BIT_TO_4G * FROM_G_TO_MS2},
+            'pelvis_accel_x': {'IDX': 7, 'CONV': FROM_15BIT_TO_4G},
+            'pelvis_accel_y': {'IDX': 8, 'CONV': FROM_15BIT_TO_4G},
+            'pelvis_accel_z': {'IDX': 9, 'CONV': FROM_15BIT_TO_4G},
 
-            'thigh_r_accel_x': {'IDX': 10, 'CONV': FROM_15BIT_TO_4G * FROM_G_TO_MS2},
-            'thigh_r_accel_y': {'IDX': 11, 'CONV': FROM_15BIT_TO_4G * FROM_G_TO_MS2},
-            'thigh_r_accel_z': {'IDX': 12, 'CONV': FROM_15BIT_TO_4G * FROM_G_TO_MS2},
+            'thigh_r_accel_x': {'IDX': 10, 'CONV': FROM_15BIT_TO_4G},
+            'thigh_r_accel_y': {'IDX': 11, 'CONV': FROM_15BIT_TO_4G},
+            'thigh_r_accel_z': {'IDX': 12, 'CONV': FROM_15BIT_TO_4G},
 
             'thigh_r_gyro_x': {'IDX': 13, 'CONV': FROM_15BIT_TO_1000DEGS * FROM_DEGS_TO_RADS},
             'thigh_r_gyro_y': {'IDX': 14, 'CONV': FROM_15BIT_TO_1000DEGS * FROM_DEGS_TO_RADS},
             'thigh_r_gyro_z': {'IDX': 15, 'CONV': FROM_15BIT_TO_1000DEGS * FROM_DEGS_TO_RADS},
 
-            'thigh_l_accel_x': {'IDX': 16, 'CONV': FROM_15BIT_TO_4G * FROM_G_TO_MS2},
-            'thigh_l_accel_y': {'IDX': 17, 'CONV': FROM_15BIT_TO_4G * FROM_G_TO_MS2},
-            'thigh_l_accel_z': {'IDX': 18, 'CONV': FROM_15BIT_TO_4G * FROM_G_TO_MS2},
+            'thigh_l_accel_x': {'IDX': 16, 'CONV': FROM_15BIT_TO_4G},
+            'thigh_l_accel_y': {'IDX': 17, 'CONV': FROM_15BIT_TO_4G},
+            'thigh_l_accel_z': {'IDX': 18, 'CONV': FROM_15BIT_TO_4G},
 
             'thigh_l_gyro_x': {'IDX': 19, 'CONV': FROM_15BIT_TO_1000DEGS * FROM_DEGS_TO_RADS},
             'thigh_l_gyro_y': {'IDX': 20, 'CONV': FROM_15BIT_TO_1000DEGS * FROM_DEGS_TO_RADS},
             'thigh_l_gyro_z': {'IDX': 21, 'CONV': FROM_15BIT_TO_1000DEGS * FROM_DEGS_TO_RADS},
 
             'exo_time': {'IDX': 22, 'CONV': 1}
-        }
+        },)
 
 
 def model_inputs_outputs_default():
     return \
-        {
+        ({
             'trq_l': \
             {
                 'IDX': 1,
@@ -99,7 +99,7 @@ def model_inputs_outputs_default():
                     'thigh_r_gyro_z': {'IDX': 13, 'CONV': 1},
                 }
             }
-        }
+        },)
         
 
 @dataclass
@@ -117,10 +117,11 @@ class ConfigurableConstants():
     # Torque filter parameters (TODO: to be used for filtering torque estimates)
     ORDER: int = 2
     F_CUT: int = 6  # Hz
+    FILT: bool = False
 
     # Data Storage & I/O Parameters
-    EXO_INPUTS: dict = exo_inputs_default()
-    MODEL_INPUTS_OUTPUTS: dict = model_inputs_outputs_default()
+    EXO_INPUTS: tuple = exo_inputs_default()
+    MODEL_INPUTS_OUTPUTS: tuple = model_inputs_outputs_default()
 
     # Model File Path
     M_FILE: str = None  # This will prompt user to select model file
@@ -130,7 +131,7 @@ class ConfigurableConstants():
     BLOCK: bool = False
 
     # Socket
-    PORT: int = 8080
+    PORT: int = 50050
 
 
 class ConfigSaver():

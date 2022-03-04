@@ -60,6 +60,24 @@ class ModelRT(object):
 		# Create stream to transfer data between cpu and gpu
 		self.stream = cuda.Stream()
 
+	def predict_breakable(self, model_input, exit_func = lambda: False):
+		# transfer input data to device
+		cuda.memcpy_htod_async(self.d_input, model_input, self.stream)
+		if exit_func(): return None
+
+		# execute model
+		self.context.execute_async_v2(self.bindings, self.stream.handle, None)
+		if exit_func(): return None
+
+		# transfer predictions back
+		cuda.memcpy_dtoh_async(self.output, self.d_output, self.stream)
+		if exit_func(): return None
+
+		# synchronize stream to make sure all operations are complete
+		self.stream.synchronize()
+
+		return self.output
+
 	def predict(self, model_input):
 		# transfer input data to device
 		cuda.memcpy_htod_async(self.d_input, model_input, self.stream)
@@ -78,6 +96,10 @@ class ModelRT(object):
 	def predict_rand(self):
 		model_input = np.random.uniform(0.0, 1.0, size=self.input_shape).astype('float32')
 		return self.predict(model_input)
+
+	def predict_rand_breakable(self, exit_func = lambda: False):
+		model_input = np.random.uniform(0.0, 1.0, size=self.input_shape).astype('float32')
+		return self.predict_breakable(model_input, exit_func = exit_func)
 
 	async def predict_async(self, model_input, exit_func = lambda: False):
 		# transfer input data to device
