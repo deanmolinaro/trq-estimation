@@ -222,8 +222,6 @@ class Estimator():
 			conv = self.config.EXO_INPUTS[k]['CONV']
 			parsed_request[k] = request[idx] * conv
 
-			print(k, idx, conv, request[idx], parsed_request[k])
-
 		return parsed_request
 
 	def update_output_from_q(self, q, block = False):
@@ -316,8 +314,6 @@ def main(config):
 			if not q_exo_inf.empty():
 				q_data = parse_q(q_exo_inf, block = False)
 				model_in = q_data[-1][0]
-				print(model_in[0, :, -1])
-				print(model_in[1, :, -1])
 				timestamp = q_data[-1][1]
 				model_out = model.predict(model_in)[-1]  # TODO: Make sure model output is flattened if multiple outputs for single input
 				q_trq_inf.put_nowait((model_out, timestamp))

@@ -69,8 +69,8 @@ def get_data(data_path, label_path, left = False):
 # print(to_server)
 
 # client = ClientTCP('localhost', 50050)
-client = ClientTCP('10.0.1.3', 50050)
-# client = ClientTCP('192.168.1.2', 50050)
+# client = ClientTCP('10.0.1.3', 50050)
+client = ClientTCP('192.168.1.2', 50050)
 print('Starting!')
 
 print('Testing Right Side')
@@ -82,19 +82,3 @@ to_server_l, label_l_df = get_data('./data/data_l.csv', './data/labels_l.csv', l
 test_jetson(client, to_server_l, label_l_df, 1)
 
 exit()
-
-client = ClientTCP('192.168.1.2', 50050)
-print('Starting!')
-num_vals = 22
-
-start_time = time.perf_counter()
-for i in range(2000):
-    message = '!' + ','.join([str(round(random.random(),3)) for i in range(num_vals)] + [str(time.time())]) + ','
-
-    time_start = time.perf_counter()
-    client.to_server(message)
-    # msg = client.from_server()
-    msg = client.from_server_wait()
-    print(msg, time.perf_counter() - time_start)
-    time.sleep(0.005)
-# print(time.perf_counter()-start_time)
