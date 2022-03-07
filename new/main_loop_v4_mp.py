@@ -236,16 +236,15 @@ class Estimator():
 
 def parse_msg(msg):
 	if msg:
-		print('Received', msg)
 		return np.array([[float(value) for value in m.split(',')[:-1]] for m in msg.split('!')[1:]]) # Ignore anything before the first ! (this should just be empty)
 	else:
 		return None
 
 
 def package_msg(msg):
-	print('Sending', msg)
 	pkg_msg = ["{:.3f}".format(m) for m in msg]
-	return "!" + ",".join(pkg_msg) + "&"
+	pkg_msg = "!" + ",".join(pkg_msg) + "&"
+	return pkg_msg
 
 
 def parse_q(q, block = False):
@@ -319,6 +318,7 @@ def main(config):
 				q_trq_inf.put_nowait((model_out, timestamp))
 
 			else:
+				continue
 				model.predict_rand_breakable(exit_func = lambda: not q_exo_inf.empty)  # TODO: Update with breakable stream
 	except:
 		# Print traceback
